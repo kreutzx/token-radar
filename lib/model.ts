@@ -1,6 +1,17 @@
-// Token Radar model "radar-3": one sealed snapshot in, one ranked board out.
+// Token Radar model "radar-4": one sealed snapshot in, one ranked board out.
 //
-// radar-3 replaces radar-2's asserted multiple (a flat TVL x 0.32 with
+// radar-4 keeps radar-3's fitted model exactly as it was — the same size
+// curve, category factors, token odds, priors and verdict lines, so every
+// row's price is unchanged — and widens the validation around it. Where
+// radar-3 reported two backtests (leave-one-out and a walk-forward time
+// split), radar-4 adds a second, independent held-out test: a five-fold
+// holdout whose folds are dealt by a hash of the protocol's slug, so the
+// split owes nothing to listing date, size or the order of the snapshot.
+// A comp is only ever priced by a model that never saw it, three different
+// ways, and all three error bands are printed on the dashboard and in
+// METHOD.md.
+//
+// radar-3 replaced radar-2's asserted multiple (a flat TVL x 0.32 with
 // hand-picked sector factors) with a model fitted to the snapshot's own traded
 // protocols, validated inside this program, and priced with its uncertainty
 // shown. Nothing is keyed to a protocol's name; every number below is either
@@ -32,8 +43,11 @@
 //
 // The band on every row is exp(median |log error|) of a leave-one-out
 // backtest of the launch model over the traded comps, recomputed each run.
-// A walk-forward split (fit on the earlier-listed half of the comps, scored
-// on the later half) is reported beside it on the dashboard and in METHOD.md.
+// Two further held-out tests are reported beside it on the dashboard and in
+// METHOD.md: a walk-forward split (fit on the earlier-listed half of the
+// comps, scored on the later half) and a five-fold holdout dealt by slug
+// hash (fit on four folds, score the fifth, rotate until every comp has
+// been priced out of sample exactly once).
 //
 // Seven-day growth is deliberately NOT a launch-value input: fitted on the
 // traded comps its slope comes out negative and regime-bound (the snapshot
@@ -93,7 +107,10 @@ export const CURATOR_CATEGORIES: ReadonlySet<string> = new Set([
   'Onchain Capital Allocator',
 ]);
 
-export const MODEL_VERSION = 'radar-3';
+export const MODEL_VERSION = 'radar-4';
+
+/** How many folds the slug-dealt holdout rotates through. */
+export const HOLDOUT_FOLDS = 5;
 
 /** How many live-token protocols the dashboard's Live view carries, by market cap. */
 export const LIVE_ROWS = 24;
@@ -196,6 +213,12 @@ export interface FitReport {
   wf_median_abs_log_err: number;
   wf_band_factor: number;
   wf_within_3x: number;
+  kf_folds: number;
+  kf_test: number;
+  kf_median_abs_log_err: number;
+  kf_band_factor: number;
+  kf_within_2x: number;
+  kf_within_3x: number;
   comps_grew_5: number;
   comps_fell_5: number;
   traded_total: number;
@@ -489,9 +512,27 @@ function launchError(model: FittedModel, comp: SnapshotProtocol): number {
 }
 
 /**
- * Both backtests, run on every build: leave-one-out over all traded comps
- * (refit without the comp, then price it), and a walk-forward split that fits
- * on the earlier-listed half of the dated comps and prices the later half.
+ * Which holdout fold a comp belongs to: a 32-bit FNV-1a hash of its slug,
+ * taken modulo the fold count. The deal is a pure function of the slug, so
+ * it is identical on every run and owes nothing to the comp's listing date,
+ * its size, or its place in the snapshot — the property that makes this
+ * holdout independent of the walk-forward's time split.
+ */
+function foldOf(slug: string, folds: number): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < slug.length; i++) {
+    h ^= slug.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0) % folds;
+}
+
+/**
+ * All three backtests, run on every build: leave-one-out over all traded
+ * comps (refit without the comp, then price it), a walk-forward split that
+ * fits on the earlier-listed half of the dated comps and prices the later
+ * half, and a five-fold holdout dealt by slug hash that fits on four folds
+ * and prices the fifth, rotating until every comp has been held out once.
  */
 function backtests(comps: SnapshotProtocol[]): Omit<FitReport, 'comps' | 'intercept' | 'slope' | 'comps_grew_5' | 'comps_fell_5' | 'traded_total' | 'traded_share'> {
   const looErrors: number[] = [];
@@ -511,6 +552,16 @@ function backtests(comps: SnapshotProtocol[]): Omit<FitReport, 'comps' | 'interc
   const wfErrors = test.map((p) => launchError(wfModel, p));
   const wfMedian = median(wfErrors);
 
+  const kfErrors: number[] = [];
+  for (let fold = 0; fold < HOLDOUT_FOLDS; fold++) {
+    const kfTrain = comps.filter((p) => foldOf(p.slug, HOLDOUT_FOLDS) !== fold);
+    const kfTest = comps.filter((p) => foldOf(p.slug, HOLDOUT_FOLDS) === fold);
+    if (kfTrain.length === 0 || kfTest.length === 0) continue;
+    const kfModel = fitModel(kfTrain);
+    for (const p of kfTest) kfErrors.push(launchError(kfModel, p));
+  }
+  const kfMedian = median(kfErrors);
+
   const share = (errors: number[], limit: number): number =>
     errors.length === 0 ? 0 : round3(errors.filter((e) => e < limit).length / errors.length);
 
@@ -525,6 +576,12 @@ function backtests(comps: SnapshotProtocol[]): Omit<FitReport, 'comps' | 'interc
     wf_median_abs_log_err: round4(wfMedian),
     wf_band_factor: round4(Math.exp(wfMedian)),
     wf_within_3x: share(wfErrors, Math.log(3)),
+    kf_folds: HOLDOUT_FOLDS,
+    kf_test: kfErrors.length,
+    kf_median_abs_log_err: round4(kfMedian),
+    kf_band_factor: round4(Math.exp(kfMedian)),
+    kf_within_2x: share(kfErrors, Math.log(2)),
+    kf_within_3x: share(kfErrors, Math.log(3)),
   };
 }
 
@@ -1073,6 +1130,13 @@ export function methodDocument(radar: RadarData): string {
     `- Walk-forward: fitting on the ${f.wf_train} comps listed by ${f.wf_split_listed_at} and pricing the ` +
       `${f.wf_test} listed later gives a median absolute log error of ${f.wf_median_abs_log_err} (x/${f.wf_band_factor}), ` +
       `${Math.round(f.wf_within_3x * 100)}% within x3 — the model is not just memorising the comps it shows.`,
+  );
+  lines.push(
+    `- Held out a second way, on a split that ignores time: the comps are dealt into ${f.kf_folds} folds by a hash ` +
+      `of the slug, each fold is priced by a model fitted on the other four, and all ${f.kf_test} comps are priced ` +
+      `exactly once, out of sample. Median absolute log error ${f.kf_median_abs_log_err} (x/${f.kf_band_factor}), ` +
+      `${Math.round(f.kf_within_2x * 100)}% within x2 and ${Math.round(f.kf_within_3x * 100)}% within x3. Because the ` +
+      `deal depends only on the slug, this test cannot be flattered by the listing order the walk-forward reads.`,
   );
   lines.push(
     `- Growth is not a launch-value input, on this evidence: ${f.comps_grew_5} of the ${f.comps} comps grew more ` +

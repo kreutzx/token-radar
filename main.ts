@@ -1,8 +1,10 @@
-// Token Radar, model radar-3 (Node 22, standard library only).
+// Token Radar, model radar-4 (Node 22, standard library only).
 //
 // Reads the sealed snapshot at /input/snapshot.json (or --input <file|dir>),
 // prices every rankable pre-token protocol with lib/model.ts (a launch model
-// fitted to the snapshot's own traded protocols, backtested in-program),
+// fitted to the snapshot's own traded protocols, backtested in-program three
+// ways: leave-one-out, a walk-forward time split, and a slug-dealt five-fold
+// holdout),
 // writes the ranked board to /output/board.json, the dashboard's data to
 // /output/data.js, copies dashboard/ and screenshots/ into /output, writes
 // the model's audit as /output/dashboard/METHOD.md, and writes

@@ -1,9 +1,9 @@
-// Token Radar dashboard, model radar-3. Reads window.RADAR (written beside
-// dashboard/ by main.ts) and renders the ranked board, filters, a per-protocol
-// detail panel, the live-token view and the method panel. No network: every
-// byte it shows is in data.js, and every value it shows is recomputed here
-// from the fitted parameters data.js carries, so the page checks board.json
-// instead of trusting it.
+// Token Radar dashboard, model radar-4. Reads window.RADAR (written beside
+// dashboard/ by main.ts) and renders the KPI strip, the ranked board, filters,
+// a per-protocol detail panel, the live-token view and the method panel. No
+// network: every byte it shows is in data.js, and every value it shows is
+// recomputed here from the fitted parameters data.js carries, so the page
+// checks board.json instead of trusting it.
 (function () {
   'use strict';
 
@@ -140,18 +140,43 @@
     );
   }
 
+  // The KPI strip: the whole audit on one line at the top of the page — the
+  // fit, all three validation bands, coverage, the board's size and its
+  // verdicts — so a reader sees the evidence before the first row.
+  function kpiStrip() {
+    var f = DATA.fit;
+    var a = DATA.accounting;
+    function kpi(label, value, sub) {
+      return el('div', { class: 'kpi' },
+        el('span', { text: label }),
+        el('b', { text: value }),
+        el('small', { text: sub })
+      );
+    }
+    return el('section', { class: 'kpis', 'aria-label': 'Model validation and coverage' },
+      kpi('Model fit', f.comps + ' comps', 'log mcap = ' + f.intercept + ' + ' + f.slope + ' \u00d7 log TVL'),
+      kpi('Band \u00b7 leave-one-out', '\u00d7/\u00f7 ' + f.band_factor, 'median |log err| ' + f.loo_median_abs_log_err + ' \u00b7 ' + Math.round(f.loo_within_3x * 100) + '% within \u00d73'),
+      kpi('Band \u00b7 held out 5-fold', '\u00d7/\u00f7 ' + f.kf_band_factor, 'slug-dealt folds \u00b7 ' + f.kf_test + ' priced out of sample'),
+      kpi('Band \u00b7 walk-forward', '\u00d7/\u00f7 ' + f.wf_band_factor, 'fit to ' + f.wf_split_listed_at + ', priced later listings'),
+      kpi('Coverage', a.watchlist_ranked + ' / ' + a.watchlist, 'watchlist \u00b7 ' + a.total + ' of ' + a.total + ' protocols accounted'),
+      kpi('Rows ranked', String(a.ranked), DATA.early_size + ' early finds below the $50M floor'),
+      kpi('Verdicts FARM / THIN / SKIP', DATA.verdict_counts.FARM + ' / ' + DATA.verdict_counts.THIN + ' / ' + DATA.verdict_counts.SKIP, 'every row carries its farm plan')
+    );
+  }
+
   function hero() {
     var f = DATA.fit;
     var a = DATA.accounting;
     return el('section', { class: 'hero' },
       el('h1', { text: 'Pre-token protocols ranked by what their token would be worth — priced by a model fitted to the ones that already launched' }),
-      el('p', { text: 'Launch value comes from a size curve fitted on this snapshot\u2019s own traded protocols, with a category factor per sector and a band from a leave-one-out backtest. Implied value weights that by token odds read from the peer record. Every protocol in the snapshot is accounted for below; the full audit is in the Method tab and in METHOD.md beside this page.' }),
+      el('p', { text: 'Launch value comes from a size curve fitted on this snapshot\u2019s own traded protocols, with a category factor per sector and a band from a leave-one-out backtest. The fit is then held out two more ways \u2014 a five-fold holdout dealt by slug hash and a walk-forward time split \u2014 and all three bands sit in the strip above. Implied value weights that by token odds read from the peer record. Every protocol in the snapshot is accounted for below; the full audit is in the Method tab and in METHOD.md beside this page.' }),
       el('div', { class: 'stats' },
         el('div', { class: 'stat' }, el('span', { text: 'Protocols accounted' }), el('b', { text: a.total + ' / ' + a.total })),
         el('div', { class: 'stat' }, el('span', { text: 'Watchlist covered' }), el('b', { text: a.watchlist_ranked + ' / ' + a.watchlist })),
         el('div', { class: 'stat' }, el('span', { text: 'Pre-token rows ranked' }), el('b', { text: String(a.ranked) })),
         el('div', { class: 'stat' }, el('span', { text: 'Traded comps fitted' }), el('b', { text: String(f.comps) })),
         el('div', { class: 'stat' }, el('span', { text: 'Backtest band (LOO)' }), el('b', { text: '\u00d7/\u00f7 ' + f.band_factor })),
+        el('div', { class: 'stat' }, el('span', { text: 'Held-out band (5-fold)' }), el('b', { text: '\u00d7/\u00f7 ' + f.kf_band_factor })),
         el('div', { class: 'stat' }, el('span', { text: 'Walk-forward band' }), el('b', { text: '\u00d7/\u00f7 ' + f.wf_band_factor })),
         el('div', { class: 'stat' }, el('span', { text: 'Verdicts FARM / THIN / SKIP' }), el('b', { text: DATA.verdict_counts.FARM + ' / ' + DATA.verdict_counts.THIN + ' / ' + DATA.verdict_counts.SKIP })),
         el('div', { class: 'stat' }, el('span', { text: 'Fit' }), el('b', { class: 'fitfig', text: 'log mcap = ' + f.intercept + ' + ' + f.slope + ' \u00d7 log TVL' }))
@@ -361,8 +386,12 @@
       el('div', { class: 'cell' }, el('span', { text: 'Comps priced within \u00d72 / \u00d73 (LOO)' }), el('b', { text: Math.round(f.loo_within_2x * 100) + '% / ' + Math.round(f.loo_within_3x * 100) + '%' })),
       el('div', { class: 'cell' }, el('span', { text: 'Walk-forward fit / test' }), el('b', { text: f.wf_train + ' / ' + f.wf_test + ' comps' })),
       el('div', { class: 'cell' }, el('span', { text: 'Walk-forward median |log error|' }), el('b', { text: String(f.wf_median_abs_log_err) })),
-      el('div', { class: 'cell' }, el('span', { text: 'Walk-forward within \u00d73' }), el('b', { text: Math.round(f.wf_within_3x * 100) + '%' }))
+      el('div', { class: 'cell' }, el('span', { text: 'Walk-forward within \u00d73' }), el('b', { text: Math.round(f.wf_within_3x * 100) + '%' })),
+      el('div', { class: 'cell' }, el('span', { text: 'Held-out folds (slug-dealt)' }), el('b', { text: f.kf_folds + ' folds \u00b7 ' + f.kf_test + ' comps' })),
+      el('div', { class: 'cell' }, el('span', { text: 'Held-out median |log error|' }), el('b', { text: String(f.kf_median_abs_log_err) })),
+      el('div', { class: 'cell' }, el('span', { text: 'Held-out band / within \u00d73' }), el('b', { text: '\u00d7/\u00f7 ' + f.kf_band_factor + ' \u00b7 ' + Math.round(f.kf_within_3x * 100) + '%' }))
     ));
+    panel.appendChild(el('p', { class: 'note', text: 'The second holdout ignores time on purpose: the comps are dealt into ' + f.kf_folds + ' folds by a hash of the slug, each fold is priced by a model fitted on the other four, and every comp is priced exactly once, out of sample. A split that cannot see the listing order cannot be flattered by it, so it checks the walk-forward rather than repeating it.' }));
     panel.appendChild(el('p', { class: 'note', text: 'Walk-forward: fit on the comps listed by ' + f.wf_split_listed_at + ', price the ones listed later. Growth is not a launch-value input, on this evidence: ' + f.comps_grew_5 + ' of the ' + f.comps + ' comps grew more than 5% in the snapshot week and ' + f.comps_fell_5 + ' fell more than 5%, so a fitted growth slope would be a falling week\u2019s artefact; growth enters through the odds peers, the concern haircut and the verdicts.' }));
     panel.appendChild(el('h3', { text: 'Category factors (fitted; source shown)' }));
     panel.appendChild(el('div', { class: 'sectors' }, DATA.factors.map(function (r) {
@@ -398,6 +427,7 @@
     app.textContent = '';
     var shell = el('div', { class: 'shell' });
     shell.appendChild(topbar());
+    shell.appendChild(kpiStrip());
     shell.appendChild(hero());
     shell.appendChild(controls());
     if (state.tab === 'pre-token') {
