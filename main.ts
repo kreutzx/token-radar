@@ -1,10 +1,12 @@
-// Token Radar, model radar-2 (Node 22, standard library only).
+// Token Radar, model radar-3 (Node 22, standard library only).
 //
 // Reads the sealed snapshot at /input/snapshot.json (or --input <file|dir>),
-// scores every rankable pre-token protocol with lib/model.ts, writes the ranked
-// board to /output/board.json, the dashboard's data to /output/data.js, copies
-// dashboard/ and screenshots/ into /output, and writes /output/dossier.json
-// with the vendored make.fun dossier library.
+// prices every rankable pre-token protocol with lib/model.ts (a launch model
+// fitted to the snapshot's own traded protocols, backtested in-program),
+// writes the ranked board to /output/board.json, the dashboard's data to
+// /output/data.js, copies dashboard/ and screenshots/ into /output, writes
+// the model's audit as /output/dashboard/METHOD.md, and writes
+// /output/dossier.json with the vendored make.fun dossier library.
 //
 // Outside the grader, MAKEFUN_OUTPUT_DIR stands in for /output:
 //   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts --input ../input/snapshot.json
@@ -12,7 +14,7 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { boardIssue, buildRadar, dataScript, parseSnapshot } from './lib/model.ts';
+import { boardIssue, buildRadar, dataScript, methodDocument, parseSnapshot } from './lib/model.ts';
 import { buildDossier } from './vendor/makefun-board.ts';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
@@ -69,6 +71,10 @@ function copyFiles(from: string, to: string): string[] {
 
 const dashFiles = copyFiles(join(here, 'dashboard'), join(out, 'dashboard'));
 if (dashFiles.length === 0) fail('dashboard/ holds no files to copy');
+// The audit document is generated, not shipped: it carries this run's own fit
+// and backtest numbers, and it must sit in the dashboard before the dossier is
+// built so the dossier's text includes it.
+writeFileSync(join(out, 'dashboard', 'METHOD.md'), methodDocument(radar));
 const shots = copyFiles(join(here, 'screenshots'), join(out, 'screenshots'));
 if (shots.length < 3) {
   fail(`screenshots/ holds ${shots.length} image${shots.length === 1 ? '' : 's'}: hand in 3, the board, a detail view and a filtered view`);
