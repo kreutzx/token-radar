@@ -1,4 +1,4 @@
-// Token Radar dashboard, model radar-4. Reads window.RADAR (written beside
+// Token Radar dashboard, model radar-5. Reads window.RADAR (written beside
 // dashboard/ by main.ts) and renders the KPI strip, the ranked board, filters,
 // a per-protocol detail panel, the live-token view and the method panel. No
 // network: every byte it shows is in data.js, and every value it shows is

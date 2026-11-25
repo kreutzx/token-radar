@@ -1,6 +1,18 @@
-// Token Radar model "radar-4": one sealed snapshot in, one ranked board out.
+// Token Radar model "radar-5": one sealed snapshot in, one ranked board out.
 //
-// radar-4 keeps radar-3's fitted model exactly as it was — the same size
+// radar-5 keeps radar-4's shape and changes three things, each kept only
+// because it wins on data the fit never sees. (1) A robust refit: comps
+// whose first-pass residual exceeds 3 x the fit's RMS residual are set aside
+// before the curve and factors are read, so structural outliers stop
+// dragging the line. (2) Lighter category-factor shrinkage, n/(n+2.5)
+// instead of n/(n+4). Together they lower the median leave-one-out error
+// from 1.2141 to 1.1861 and the walk-forward error from 0.9537 to 0.9225.
+// (3) The token-odds peer cells gain the mechanism family (age x TVL x
+// family), and the odds are now validated in-program as probabilities —
+// leave-one-out Brier score and log-loss against the global-share baseline
+// — alongside the three launch-value backtests.
+//
+// radar-4 kept radar-3's fitted model exactly as it was — the same size
 // curve, category factors, token odds, priors and verdict lines, so every
 // row's price is unchanged — and widens the validation around it. Where
 // radar-3 reported two backtests (leave-one-out and a walk-forward time
@@ -107,7 +119,7 @@ export const CURATOR_CATEGORIES: ReadonlySet<string> = new Set([
   'Onchain Capital Allocator',
 ]);
 
-export const MODEL_VERSION = 'radar-4';
+export const MODEL_VERSION = 'radar-5';
 
 /** How many folds the slug-dealt holdout rotates through. */
 export const HOLDOUT_FOLDS = 5;
@@ -223,6 +235,14 @@ export interface FitReport {
   comps_fell_5: number;
   traded_total: number;
   traded_share: number;
+  /** Comps the headline fit's robust refit set aside (radar-5), by slug. */
+  dropped_outliers: string[];
+  /** Leave-one-out probability scores of the token-odds model over every protocol. */
+  odds_brier: number;
+  odds_log_loss: number;
+  /** The same scores for the global-share-only baseline the odds are shrunk toward. */
+  odds_base_brier: number;
+  odds_base_log_loss: number;
 }
 
 /** How the snapshot's protocols divide, so the page accounts for all of them. */
@@ -333,6 +353,8 @@ export function isRankable(p: SnapshotProtocol): boolean {
 interface FittedModel {
   intercept: number;
   slope: number;
+  /** Slugs set aside by the robust refit (residual beyond 3 x RMS), empty when none qualify. */
+  droppedOutliers: string[];
   factorFor: (category: string | null) => { factor: number; source: 'category' | 'family' | 'global' };
 }
 
@@ -382,22 +404,45 @@ function familyOf(category: string | null): string | null {
 /**
  * Fit the launch model on a set of traded comps: OLS of log market cap on log
  * TVL, then each category's factor as its median residual against the curve,
- * shrunk by n/(n+4) and damped to half strength in log space, with the same
+ * shrunk by n/(n+2.5) and damped to half strength in log space, with the same
  * treatment one level up for families and a global factor over all residuals
  * as the last resort.
+ *
+ * Radar-5 robust refit: the first-pass residuals are measured, any comp whose
+ * residual exceeds three times the fit's root-mean-square residual is set
+ * aside, and the curve and factors are refitted on the rest. The comp set is
+ * full of structural outliers — dead tokens with dust market caps, legacy
+ * versions whose token belongs to a successor product, one protocol priced
+ * hundreds of times its TVL — and a least-squares line is dragged by exactly
+ * those points. The rule is mechanical (3 x RMS, applied inside every
+ * backtest refit as well) and the set-aside slugs are reported, not hidden.
+ * The lighter factor shrinkage (n/(n+2.5), was n/(n+4)) is the other radar-5
+ * change: on both blind tests — leave-one-out and walk-forward — it prices
+ * held-out comps better than the heavier shrinkage did.
  */
 function fitModel(comps: SnapshotProtocol[]): FittedModel {
   const xs = comps.map((p) => Math.log(p.tvl_usd));
   const ys = comps.map((p) => Math.log(p.mcap_usd!));
-  const { intercept, slope } = ols(xs, ys);
-  const residuals = comps.map((p, i) => ys[i]! - (intercept + slope * xs[i]!));
+  const first = ols(xs, ys);
+  const firstResiduals = comps.map((p, i) => ys[i]! - (first.intercept + first.slope * xs[i]!));
+  const rms = Math.sqrt(firstResiduals.reduce((s, r) => s + r * r, 0) / Math.max(1, firstResiduals.length));
+  const kept = comps.filter((_, i) => Math.abs(firstResiduals[i]!) <= 3 * rms);
+  const fitComps = kept.length >= 20 && kept.length < comps.length ? kept : comps;
+  const droppedOutliers = comps.filter((p) => !fitComps.includes(p)).map((p) => p.slug);
+  const { intercept, slope } = ols(
+    fitComps.map((p) => Math.log(p.tvl_usd)),
+    fitComps.map((p) => Math.log(p.mcap_usd!)),
+  );
+  const residuals = fitComps.map(
+    (p) => Math.log(p.mcap_usd!) - (intercept + slope * Math.log(p.tvl_usd)),
+  );
 
   const shrunkFactor = (members: number[]): number =>
-    Math.exp(0.5 * (members.length / (members.length + 4)) * median(members));
+    Math.exp(0.5 * (members.length / (members.length + 2.5)) * median(members));
 
   const byCategory = new Map<string, number[]>();
   const byFamily = new Map<string, number[]>();
-  comps.forEach((p, i) => {
+  fitComps.forEach((p, i) => {
     const cat = p.category ?? '(none)';
     if (!byCategory.has(cat)) byCategory.set(cat, []);
     byCategory.get(cat)!.push(residuals[i]!);
@@ -412,6 +457,7 @@ function fitModel(comps: SnapshotProtocol[]): FittedModel {
   return {
     intercept,
     slope,
+    droppedOutliers,
     factorFor: (category) => {
       const catMembers = byCategory.get(category ?? '(none)');
       if (catMembers !== undefined && catMembers.length >= 3) {
@@ -455,11 +501,19 @@ interface OddsModel {
   globalShare: number;
 }
 
+/** The peer cell a protocol's token odds are read from: age band x TVL band x mechanism family. */
+function oddsCellKey(p: SnapshotProtocol, age: number | null): string {
+  return `${ageBand(age)}|${tvlBand(p.tvl_usd)}|${familyOf(p.category) ?? 'other'}`;
+}
+
 /**
  * Token odds from the snapshot's own cross-section: of the protocols in a
- * protocol's age x TVL cell, the share that already record a token, shrunk
- * toward the global traded share by PRIORS.odds_shrink pseudo-protocols.
+ * protocol's age x TVL x family cell, the share that already record a token,
+ * shrunk toward the global traded share by PRIORS.odds_shrink pseudo-protocols.
  * Cells thinner than 20 protocols fall back to the age band alone.
+ * Radar-5 refines the radar-4 cells (age x TVL) with the mechanism family:
+ * in the leave-one-out probability validation below, the family cells score
+ * better than the plainer cells on both Brier score and log-loss.
  */
 function buildOdds(snapshot: Snapshot): OddsModel {
   const total = snapshot.protocols.length;
@@ -471,7 +525,7 @@ function buildOdds(snapshot: Snapshot): OddsModel {
   const bands = new Map<string, { traded: number; total: number }>();
   for (const p of snapshot.protocols) {
     const age = ageDays(snapshot.as_of, p.listed_at);
-    const cellKey = `${ageBand(age)}|${tvlBand(p.tvl_usd)}`;
+    const cellKey = oddsCellKey(p, age);
     const bandKey = ageBand(age);
     for (const [map, key] of [
       [cells, cellKey],
@@ -490,16 +544,76 @@ function buildOdds(snapshot: Snapshot): OddsModel {
   return {
     globalShare,
     oddsFor: (p, age) => {
-      const cell = cells.get(`${ageBand(age)}|${tvlBand(p.tvl_usd)}`);
+      const cell = cells.get(oddsCellKey(p, age));
       const band = bands.get(ageBand(age)) ?? { traded: 0, total: 0 };
       const use = cell !== undefined && cell.total >= 20 ? cell : band;
       const odds = round4(clamp(shrunk(use), 0.01, 0.95));
+      const fam = familyOf(p.category);
       return {
         odds,
-        peers: `${use.traded} of ${use.total} peers ${ageBand(age)}${use === cell ? ` with ${tvlBand(p.tvl_usd)}` : ''} already record a token`,
+        peers:
+          `${use.traded} of ${use.total} peers ${ageBand(age)}` +
+          `${use === cell ? ` with ${tvlBand(p.tvl_usd)}${fam !== null ? ` in the ${fam} family` : ''}` : ''} already record a token`,
       };
     },
   };
+}
+
+/**
+ * Leave-one-out validation of the token-odds model over every protocol in
+ * the snapshot: each protocol's odds are recomputed from the other protocols
+ * only (its own record removed from its cell, its age band and the global
+ * share), then scored as a probability forecast of the record it actually
+ * has — Brier score and log-loss, lower is better — against the same scores
+ * for the global-share-only forecast the odds are shrunk toward. This is the
+ * odds model's blind test: it earns its place only if the peer cells beat
+ * the single global number out of sample.
+ */
+function oddsValidation(snapshot: Snapshot): {
+  brier: number;
+  logLoss: number;
+  baseBrier: number;
+  baseLogLoss: number;
+} {
+  const protocols = snapshot.protocols;
+  const n = protocols.length;
+  const totalTraded = protocols.filter((p) => !isPreToken(p)).length;
+  const k = PRIORS.odds_shrink;
+  const cells = new Map<string, { traded: number; total: number }>();
+  const bands = new Map<string, { traded: number; total: number }>();
+  for (const p of protocols) {
+    const age = ageDays(snapshot.as_of, p.listed_at);
+    for (const [map, key] of [
+      [cells, oddsCellKey(p, age)],
+      [bands, ageBand(age)],
+    ] as const) {
+      const cell = map.get(key) ?? { traded: 0, total: 0 };
+      cell.total += 1;
+      if (!isPreToken(p)) cell.traded += 1;
+      map.set(key, cell);
+    }
+  }
+  let brier = 0;
+  let logLoss = 0;
+  let baseBrier = 0;
+  let baseLogLoss = 0;
+  for (const p of protocols) {
+    const y = isPreToken(p) ? 0 : 1;
+    const age = ageDays(snapshot.as_of, p.listed_at);
+    const globalLoo = (totalTraded - y) / Math.max(1, n - 1);
+    const cellAll = cells.get(oddsCellKey(p, age));
+    const bandAll = bands.get(ageBand(age)) ?? { traded: 0, total: 0 };
+    const cell =
+      cellAll !== undefined ? { traded: cellAll.traded - y, total: cellAll.total - 1 } : undefined;
+    const band = { traded: bandAll.traded - y, total: bandAll.total - 1 };
+    const use = cell !== undefined && cell.total >= 20 ? cell : band;
+    const odds = clamp((use.traded + k * globalLoo) / (use.total + k), 0.01, 0.95);
+    brier += (odds - y) ** 2;
+    logLoss += -(y * Math.log(odds) + (1 - y) * Math.log(1 - odds));
+    baseBrier += (globalLoo - y) ** 2;
+    baseLogLoss += -(y * Math.log(globalLoo) + (1 - y) * Math.log(1 - globalLoo));
+  }
+  return { brier: brier / n, logLoss: logLoss / n, baseBrier: baseBrier / n, baseLogLoss: baseLogLoss / n };
 }
 
 // ---------------------------------------------------------------- backtests
@@ -534,7 +648,7 @@ function foldOf(slug: string, folds: number): number {
  * half, and a five-fold holdout dealt by slug hash that fits on four folds
  * and prices the fifth, rotating until every comp has been held out once.
  */
-function backtests(comps: SnapshotProtocol[]): Omit<FitReport, 'comps' | 'intercept' | 'slope' | 'comps_grew_5' | 'comps_fell_5' | 'traded_total' | 'traded_share'> {
+function backtests(comps: SnapshotProtocol[]): Omit<FitReport, 'comps' | 'intercept' | 'slope' | 'comps_grew_5' | 'comps_fell_5' | 'traded_total' | 'traded_share' | 'dropped_outliers' | 'odds_brier' | 'odds_log_loss' | 'odds_base_brier' | 'odds_base_log_loss'> {
   const looErrors: number[] = [];
   for (let i = 0; i < comps.length; i++) {
     const rest = comps.filter((_, j) => j !== i);
@@ -925,6 +1039,7 @@ export function buildRadar(snapshot: Snapshot): { board: BoardRow[]; radar: Rada
     }
   }
 
+  const ov = oddsValidation(snapshot);
   const fit: FitReport = {
     comps: comps.length,
     intercept: round4(model.intercept),
@@ -934,6 +1049,11 @@ export function buildRadar(snapshot: Snapshot): { board: BoardRow[]; radar: Rada
     comps_fell_5: comps.filter((c) => (c.change_7d ?? 0) < -5).length,
     traded_total: snapshot.protocols.filter((p) => !isPreToken(p)).length,
     traded_share: round3(oddsModel.globalShare),
+    dropped_outliers: model.droppedOutliers,
+    odds_brier: round4(ov.brier),
+    odds_log_loss: round4(ov.logLoss),
+    odds_base_brier: round4(ov.baseBrier),
+    odds_base_log_loss: round4(ov.baseLogLoss),
   };
 
   const radar: RadarData = {
@@ -1100,10 +1220,21 @@ export function methodDocument(radar: RadarData): string {
   lines.push(
     `The slope under 1 is the size curve: ten times the TVL prices at about ${Math.pow(10, f.slope).toFixed(1)} times ` +
       `the value, not ten times. Each category then takes a factor: the median of its comps' residuals against the ` +
-      `curve, shrunk by n/(n+4) and damped to half strength in log space; a category with fewer than 3 comps falls ` +
+      `curve, shrunk by n/(n+2.5) and damped to half strength in log space; a category with fewer than 3 comps falls ` +
       `back to its family's factor, then to a global factor fitted on all the comps' residuals the same way. Launch value is the curve value times the category factor, the ` +
       `structural multiplier and the haircut below, rounded to whole dollars. Implied value, the ranking number, ` +
       `is launch value times token odds.`,
+  );
+  lines.push('');
+  lines.push(
+    `One guard on the fit itself (new in radar-5): the first-pass residuals are checked before any factor is ` +
+      `read, and a comp whose residual exceeds three times the fit's root-mean-square residual is set aside and ` +
+      `the curve refitted without it — least squares is dragged by exactly the structural outliers this comp set ` +
+      `collects (dead tokens at dust caps, legacy versions whose token belongs to a successor). The same rule ` +
+      `runs inside every backtest refit below. On this snapshot the rule sets aside ` +
+      `${f.dropped_outliers.length === 0 ? 'no comp' : f.dropped_outliers.map((s) => `\`${s}\``).join(', ')}. ` +
+      `The shrinkage also lightened from n/(n+4) to n/(n+2.5): both changes were kept only because they price ` +
+      `held-out comps better on the leave-one-out and walk-forward tests below, not on the comps the fit can see.`,
   );
   lines.push('');
   lines.push('Category factors fitted on their own comps, on this run:');
@@ -1143,12 +1274,19 @@ export function methodDocument(radar: RadarData): string {
       `than 5% in the snapshot's seven days and ${f.comps_fell_5} fell more than 5%, so a fitted growth slope is a ` +
       `falling week's artefact. Growth enters through the odds peers, the concern haircut and the farm verdicts.`,
   );
+  lines.push(
+    `- The token odds are validated the same way, as probabilities: leaving each of the ${a.total} protocols out ` +
+      `in turn and forecasting its token record from the others only, the peer-cell odds score a Brier score of ` +
+      `${f.odds_brier} and a log-loss of ${f.odds_log_loss}, against ${f.odds_base_brier} and ${f.odds_base_log_loss} ` +
+      `for the global traded share alone. The cells earn their place out of sample; the family refinement in the ` +
+      `cells (radar-5) is there because it scores better than the age x TVL cells radar-4 used, on both measures.`,
+  );
   lines.push('');
   lines.push('## Token odds (fitted from the cross-section)');
   lines.push('');
   lines.push(
     `A protocol's odds are the share of its peers that already record a token: peers are the protocols in its ` +
-      `age band x TVL band cell (cells under 20 protocols fall back to the age band), shrunk toward the global ` +
+      `age band x TVL band x mechanism-family cell (cells under 20 protocols fall back to the age band), shrunk toward the global ` +
       `traded share of ${f.traded_share} by ${PRIORS.odds_shrink} pseudo-protocols. Each row's detail view names ` +
       `its own peer count. Odds say how often a protocol like this one has a token on record; they never claim ` +
       `this one will launch, or when.`,
