@@ -1,12 +1,12 @@
-// Token Radar, model radar-5 (Node 22, standard library only).
+// Token Radar, model radar-6 (Node 22, standard library only).
 //
 // Reads the sealed snapshot at /input/snapshot.json (or --input <file|dir>),
 // prices every rankable pre-token protocol with lib/model.ts (a launch model
-// fitted to the snapshot's own traded protocols — radar-5 adds a robust
-// outlier refit and lighter factor shrinkage to radar-4's fit, and validates
-// the token odds as probabilities — backtested in-program three ways:
-// leave-one-out, a walk-forward time split, and a slug-dealt five-fold
-// holdout),
+// fitted to the snapshot's own traded protocols — radar-6 adds recency-
+// weighted category factors, a fitted logistic for the token odds in place
+// of peer cells, per-row bootstrap ranges, and verdicts priced against
+// fees, a T-bill and an hourly wage on one stated scenario; every term is
+// kept or dropped on two blind tests, printed as an ablation in METHOD.md),
 // writes the ranked board to /output/board.json, the dashboard's data to
 // /output/data.js, copies dashboard/ and screenshots/ into /output, writes
 // the model's audit as /output/dashboard/METHOD.md, and writes
