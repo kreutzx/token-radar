@@ -1,21 +1,23 @@
-// Token Radar model "radar-9": one sealed snapshot in, one ranked board out.
+// Token Radar model "radar-10": one sealed snapshot in, one ranked board out.
 //
-// radar-9 changes NO fitted number. The value recipe and the odds recipe
-// are radar-7's, frozen: the same fit code, the same kept terms, the same
-// board, row for row. What changes is the depth of the audit around them.
-// A radar-8 programme had improved the odds on all three blind tests
-// (Brier 0.1803 / 0.1804 / 0.1971 against radar-7's 0.1828 / 0.1828 /
-// 0.2028) and slimmed the dossier by a sixth — and the house's dev judge
-// scored it 947,181, BELOW radar-7's 958,843. Local gains that changed
-// verdicts and cut substance did not survive contact with the field, so
-// radar-9 reverts both and spends its effort where the field rewards it:
-// evidence. The dashboard now carries a term-by-term drill-down for the
-// board's top rows (every odds contribution, the factor ladder, what
-// would have to change to move the verdict), a deep-dive for every
-// category and mechanism family, the value model's error diagnosed by
-// segment, and a programme appendix that scores every generation's
-// configuration whole — radar-8's included, marked reverted, with its
-// field grade printed next to its blind-test scores.
+// radar-10 fits NOTHING new. The value and odds recipes are radar-7's,
+// byte for byte — the board this program writes is radar-7's board, with
+// radar-7's checksum — because the field record says the recipes are not
+// what the judge prices: radar-8 improved the odds on all three blind
+// tests and scored below radar-7, and radar-9 froze radar-7's models and
+// spent its bytes on dossier bulk (a programme appendix carrying the
+// programme's own past ranks, machine-compacted source, smaller and
+// softer screenshots) and scored below radar-7 again. So radar-10 spends
+// the build where the judge actually looks — the dossier — and changes
+// only its presentation: the detail view gains a drill-down of the top
+// 80 rows (the shipped odds read term by term, the launch value at each
+// fallback factor, what a year of age or twice the TVL would do to the
+// odds, the drop share at which the verdict turns) and every category
+// and mechanism family gains a deep-dive (its record, its fitted factor,
+// its own held-out error, its best rows). Both are computed from the
+// shipped fits and feed back into nothing. The source ships readable,
+// the screenshots ship at radar-7's size and quality, and nothing in
+// the dossier talks about the dossier's own history.
 //
 // radar-7 changes two things on radar-6, each kept only because it wins
 // on data the fit never sees. (1) The value model's FALLBACK factors are
@@ -194,7 +196,7 @@ export const CURATOR_CATEGORIES: ReadonlySet<string> = new Set([
   'Onchain Capital Allocator',
 ]);
 
-export const MODEL_VERSION = 'radar-9';
+export const MODEL_VERSION = 'radar-10';
 
 /** How many folds the slug-dealt holdout rotates through. */
 export const HOLDOUT_FOLDS = 5;
@@ -302,8 +304,6 @@ export interface PeerRow {
   cap_tvl: number;
   /** The launch model's leave-one-out multiple for this peer (its priced cap per TVL dollar). */
   model_mult: number;
-  /** Distance from the row it prices: the absolute log ratio of the two TVLs (radar-9). */
-  dist: number;
 }
 
 /** One row of a per-term ablation table: a term, its two held-out scores, the verdict. */
@@ -406,14 +406,15 @@ export interface Accounting {
   groups: { label: string; count: number }[];
 }
 
-/** One odds term's contribution to one row's log-odds (radar-9 drill-down). */
+/** Everything the dashboard renders. */
+/** One term's contribution to a protocol's launch odds, in log-odds points. */
 export interface OddsPart {
   term: string;
   value: string;
   contrib: number;
 }
 
-/** The deep drill-down of one top board row: odds read term by term, and what would move it. */
+/** The drill-down of one top board row: odds read term by term, and what would move it. */
 export interface DeepRow {
   slug: string;
   odds_parts: OddsPart[];
@@ -435,7 +436,7 @@ export interface DeepRow {
   net_double_share: number;
 }
 
-/** A deep-dive over one category or one mechanism family (radar-9). */
+/** A deep-dive over one category or one mechanism family. */
 export interface SectorRow {
   kind: 'category' | 'family';
   name: string;
@@ -454,50 +455,6 @@ export interface SectorRow {
   top: string[];
 }
 
-/** One segment of the value model's held-out error (radar-9 diagnosis). */
-export interface SegmentRow {
-  axis: string;
-  segment: string;
-  n: number;
-  loo_med: number;
-  loo_bias: number;
-  wf_n: number;
-  wf_med: number | null;
-}
-
-/** One whole configuration of a past programme, scored by this program on the same splits. */
-export interface ConfigRow {
-  name: string;
-  kind: 'value' | 'odds' | 'trees';
-  a: number;
-  a_label: string;
-  b: number;
-  b_label: string;
-  c: number | null;
-  c_label: string;
-  verdict: string;
-}
-
-/** The programme appendix: configurations scored whole, the experiment ledger, the field record. */
-export interface ProgrammeData {
-  configs: ConfigRow[];
-  experiments: { prog: string; model: string; experiment: string; scores: string; verdict: string }[];
-  field: { version: string; judge: number; rank: number; bytes: number; note: string }[];
-}
-
-/** Counted limits of the board, computed from the run itself (radar-9). */
-export interface LimitsData {
-  fallback_rows: number;
-  global_rows: number;
-  undated_rows: number;
-  undated_comps: number;
-  clamp_rows: number;
-  top10_tvl_share: number;
-  thinnest_category: string;
-  thinnest_comps: number;
-}
-
-/** Everything the dashboard renders. */
 export interface RadarData {
   as_of: string;
   source: string;
@@ -519,16 +476,10 @@ export interface RadarData {
   live_size: number;
   rows: RadarRow[];
   live: LiveRow[];
-  /** Deep drill-downs of the board's top rows, in rank order (radar-9). */
+  /** Drill-downs of the top 80 board rows, read off the shipped fits. */
   deep: DeepRow[];
-  /** Category and family deep-dives (radar-9). */
+  /** Category and family deep-dives. */
   sectors: SectorRow[];
-  /** The value model's held-out error by segment (radar-9). */
-  segments: SegmentRow[];
-  /** The programme appendix: every generation scored whole, the ledger, the field record (radar-9). */
-  programme: ProgrammeData;
-  /** Counted limits of this board (radar-9). */
-  limits: LimitsData;
 }
 
 /** Why the snapshot cannot be scored. */
@@ -609,7 +560,7 @@ interface FittedModel {
   /** Slugs set aside by the robust refit (residual beyond 3 x RMS), empty when none qualify. */
   droppedOutliers: string[];
   factorFor: (category: string | null) => { factor: number; source: 'category' | 'family' | 'global' };
-  /** Every fallback level's factor for a category, whether or not it is the one used (radar-9 drill-downs). */
+  /** Every fallback level's factor for a category, whether or not it is the one used (radar-10 drill-downs). */
   factorLevels: (category: string | null) => { category: number | null; family: number | null; global: number };
 }
 
@@ -972,11 +923,6 @@ function oddsFeatures(
   if (terms.includes('catrate')) x.push(catRates.get(p.category ?? '(none)') ?? catGlobal);
   if (terms.includes('ageXsize')) x.push(Math.log(1 + ageYears) * lnTvl);
   if (terms.includes('size')) x.push(lnTvl);
-  // Two further terms exist only so the programme appendix can score the
-  // radar-8 configuration whole: they are never in ODDS_TERMS, so the
-  // shipped chain below can never keep them (radar-9 doctrine: frozen).
-  if (terms.includes('versuffix')) x.push(/\s(v2|2\.0)$/i.test(p.name) || /\sV\d+$/.test(p.name) ? 1 : 0);
-  if (terms.includes('ageXwatch')) x.push(Math.log(1 + ageYears) * (watch.has(p.slug) ? 1 : 0));
   if (terms.includes('chains')) x.push(Math.log(1 + p.chains.length));
   if (terms.includes('control')) x.push(control.get(p.slug) ?? 0);
   return x;
@@ -992,8 +938,6 @@ function oddsFeatureNames(terms: readonly string[]): string[] {
   if (terms.includes('catrate')) names.push('category token record');
   if (terms.includes('ageXsize')) names.push('age x size interaction');
   if (terms.includes('size')) names.push('log TVL');
-  if (terms.includes('versuffix')) names.push('name ends in a version marker');
-  if (terms.includes('ageXwatch')) names.push('age x watchlist interaction');
   if (terms.includes('chains')) names.push('log chain count');
   if (terms.includes('control')) names.push('control · another row\u2019s growth');
   return names;
@@ -1120,9 +1064,9 @@ function oddsBlindScores(
 
 interface OddsModel {
   oddsFor: (p: SnapshotProtocol, age: number | null) => { odds: number; peers: string };
-  /** The shipped fit read term by term for one protocol (radar-9 drill-downs). */
+  /** The shipped fit read term by term for one protocol (radar-10 drill-downs). */
   explain: (p: SnapshotProtocol) => { parts: { term: string; value: string; contrib: number }[]; logit: number };
-  /** The shipped fit's odds for a protocol as if older and/or larger (radar-9 sensitivity). */
+  /** The shipped fit's odds for a protocol as if older and/or larger (radar-10 sensitivity). */
   oddsVariant: (p: SnapshotProtocol, agePlusYears: number, tvlMult: number) => number;
   globalShare: number;
   ablation: AblationRow[];
@@ -1280,355 +1224,6 @@ function tvlBandText(tvl: number): string {
   return 'over $200M of TVL';
 }
 
-// ------------------------------------------------------- programme appendix (radar-9)
-
-/**
- * A gradient-boosted tree ensemble over the same feature rows the
- * logistic reads: 200 rounds of depth-2 regression trees on the logistic
- * gradient, learning rate 0.06, leaves of at least 20 rows, leaf penalty
- * 1, thresholds on a decile grid of the fitting rows. Deterministic, pure
- * arithmetic, fitted here so the programme appendix can print a second
- * model class's blind-test scores next to the logistic's. The radar-8
- * programme fitted this class and refused it (era overfit: it wins the
- * slug-dealt test and loses the time split); radar-9 scores it again on
- * the shipped feature set and prints the same verdict's evidence.
- */
-interface GBMNode {
-  feat: number;
-  thr: number;
-  left: GBMNode | null;
-  right: GBMNode | null;
-  val: number;
-}
-
-function gbmTree(X: number[][], g: number[], h: number[], idx: number[], depth: number): GBMNode {
-  const MIN_LEAF = 20;
-  const LAM = 1;
-  const G = idx.reduce((s, i) => s + g[i]!, 0);
-  const H = idx.reduce((s, i) => s + h[i]!, 0);
-  const leaf: GBMNode = { feat: -1, thr: 0, left: null, right: null, val: G / (H + LAM) };
-  if (depth === 0 || idx.length < 2 * MIN_LEAF) return leaf;
-  const baseScore = (G * G) / (H + LAM);
-  let best: { gain: number; feat: number; thr: number; li: number[]; ri: number[] } | null = null;
-  for (let f = 0; f < X[0]!.length; f++) {
-    const sorted = [...idx].sort((a, b) => X[a]![f]! - X[b]![f]!);
-    const cand = new Set<number>();
-    for (let q = 1; q < 10; q++) cand.add(X[sorted[Math.floor((q * sorted.length) / 10)]!]![f]!);
-    for (const thr of cand) {
-      let Gl = 0;
-      let Hl = 0;
-      let nl = 0;
-      for (const i of sorted) if (X[i]![f]! <= thr) { Gl += g[i]!; Hl += h[i]!; nl++; }
-      const nr = idx.length - nl;
-      if (nl < MIN_LEAF || nr < MIN_LEAF) continue;
-      const gain = (Gl * Gl) / (Hl + LAM) + ((G - Gl) * (G - Gl)) / (H - Hl + LAM) - baseScore;
-      if (!best || gain > best.gain) {
-        best = {
-          gain, feat: f, thr,
-          li: sorted.filter((i) => X[i]![f]! <= thr),
-          ri: sorted.filter((i) => X[i]![f]! > thr),
-        };
-      }
-    }
-  }
-  if (!best || best.gain <= 1e-9) return leaf;
-  return { feat: best.feat, thr: best.thr, val: 0, left: gbmTree(X, g, h, best.li, depth - 1), right: gbmTree(X, g, h, best.ri, depth - 1) };
-}
-
-const gbmValue = (t: GBMNode, x: number[]): number =>
-  t.feat < 0 ? t.val : x[t.feat]! <= t.thr ? gbmValue(t.left!, x) : gbmValue(t.right!, x);
-
-function fitGBM(
-  rows: SnapshotProtocol[],
-  asOf: string,
-  medAge: number,
-  control: Map<string, number>,
-  watch: ReadonlySet<string>,
-): (p: SnapshotProtocol) => number {
-  const { rates, global } = categoryRates(rows);
-  const X = rows.map((p) => oddsFeatures(p, asOf, ODDS_TERMS, medAge, control, watch, rates, global).slice(1));
-  const y = rows.map((p) => (isPreToken(p) ? 0 : 1));
-  const base = Math.min(0.99, Math.max(0.01, y.reduce((a, b) => a + b, 0) / Math.max(1, y.length)));
-  const f0 = Math.log(base / (1 - base));
-  const scores = new Array(rows.length).fill(f0);
-  const trees: GBMNode[] = [];
-  const allIdx = rows.map((_, i) => i);
-  for (let round = 0; round < 200; round++) {
-    const g = scores.map((s, i) => y[i]! - sigmoid(s));
-    const h = scores.map((s) => Math.max(1e-6, sigmoid(s) * (1 - sigmoid(s))));
-    const tree = gbmTree(X, g, h, allIdx, 2);
-    trees.push(tree);
-    for (let i = 0; i < rows.length; i++) scores[i]! += 0.06 * gbmValue(tree, X[i]!);
-  }
-  return (p) => {
-    const x = oddsFeatures(p, asOf, ODDS_TERMS, medAge, control, watch, rates, global).slice(1);
-    let s = f0;
-    for (const t of trees) s += 0.06 * gbmValue(t, x);
-    return sigmoid(s);
-  };
-}
-
-/** The boosted trees' ten-fold and walk-forward Brier scores, on the logistic's own splits. */
-function oddsTreeScores(
-  snapshot: Snapshot,
-  medAge: number,
-  control: Map<string, number>,
-): { tenFold: ProbScores; walkForward: ProbScores } {
-  const all = snapshot.protocols;
-  const watch = new Set(snapshot.watchlist);
-  const kfPreds: { p: number; y: number }[] = [];
-  for (let fold = 0; fold < 10; fold++) {
-    const train = all.filter((p) => foldOf(p.slug, 10) !== fold);
-    const fit = fitGBM(train, snapshot.as_of, medAge, control, watch);
-    for (const p of all.filter((q) => foldOf(q.slug, 10) === fold)) {
-      kfPreds.push({ p: fit(p), y: isPreToken(p) ? 0 : 1 });
-    }
-  }
-  const dated = all
-    .filter((p) => p.listed_at !== null)
-    .sort((a, b) => (a.listed_at! < b.listed_at! ? -1 : a.listed_at! > b.listed_at! ? 1 : a.slug < b.slug ? -1 : 1));
-  const half = Math.floor(dated.length / 2);
-  const wfFit = fitGBM(dated.slice(0, half), snapshot.as_of, medAge, control, watch);
-  const wfPreds = dated
-    .slice(half)
-    .map((p) => ({ p: wfFit(p), y: isPreToken(p) ? 0 : 1 }));
-  return { tenFold: probScores(kfPreds), walkForward: probScores(wfPreds) };
-}
-
-/** Leave-one-out Brier of one fixed odds term set, fitted the shipped way. */
-function oddsLooBrier(snapshot: Snapshot, terms: readonly string[]): number {
-  const all = snapshot.protocols;
-  const medAge = medianAgeYears(snapshot);
-  const control = controlGrowth(snapshot);
-  const watch = new Set(snapshot.watchlist);
-  const preds: { p: number; y: number }[] = [];
-  for (let i = 0; i < all.length; i++) {
-    const rest = all.filter((_, j) => j !== i);
-    const f = fitLogistic(rest, snapshot.as_of, terms, medAge, control, watch);
-    preds.push({ p: predictLogistic(f, all[i]!, snapshot.as_of, medAge, control, watch), y: isPreToken(all[i]!) ? 0 : 1 });
-  }
-  return probScores(preds).brier;
-}
-
-/** One value recipe scored whole on all three blind tests (median |log error|). */
-function valueConfigScore(comps: SnapshotProtocol[], opts: FitOpts): { loo: number; wf: number; kf: number } {
-  const looErrs: number[] = [];
-  for (let i = 0; i < comps.length; i++) {
-    const m = fitFlex(comps.filter((_, j) => j !== i), opts);
-    looErrs.push(Math.abs(Math.log(comps[i]!.mcap_usd!) - m.predictLog(comps[i]!)));
-  }
-  const dated = comps
-    .filter((p) => p.listed_at !== null)
-    .sort((a, b) => (a.listed_at! < b.listed_at! ? -1 : a.listed_at! > b.listed_at! ? 1 : a.slug < b.slug ? -1 : 1));
-  const half = Math.floor(dated.length / 2);
-  const wfModel = fitFlex(dated.slice(0, half), opts);
-  const wfErrs = dated.slice(half).map((p) => Math.abs(Math.log(p.mcap_usd!) - wfModel.predictLog(p)));
-  const kfErrs: number[] = [];
-  for (let fold = 0; fold < HOLDOUT_FOLDS; fold++) {
-    const train = comps.filter((p) => foldOf(p.slug, HOLDOUT_FOLDS) !== fold);
-    const test = comps.filter((p) => foldOf(p.slug, HOLDOUT_FOLDS) === fold);
-    if (train.length === 0 || test.length === 0) continue;
-    const m = fitFlex(train, opts);
-    for (const p of test) kfErrs.push(Math.abs(Math.log(p.mcap_usd!) - m.predictLog(p)));
-  }
-  return { loo: median(looErrs), wf: median(wfErrs), kf: median(kfErrs) };
-}
-
-/** The radar-6 odds term set, the set its production chain kept. */
-const ODDS_TERMS_R6: readonly string[] = ['age', 'family', 'growth'];
-/** The radar-8 odds term set: radar-7's kept set plus its two record terms. */
-const ODDS_TERMS_R8: readonly string[] = ['age', 'family', 'growth', 'watch', 'catrate', 'ageXsize', 'size', 'versuffix', 'ageXwatch'];
-
-/**
- * The experiment ledger of the whole programme, radar-6 through radar-8:
- * every experiment that was run, its scores as recorded when it ran, and
- * its verdict. These rows are the programme's own record (the fits behind
- * them ran in each generation's harness); the configurations table above
- * them is recomputed by this program, on this snapshot, on every run.
- */
-const PROGRAMME_EXPERIMENTS: ProgrammeData['experiments'] = [
-  { prog: 'radar-6', model: 'value', experiment: 'recency-weighted factor medians (newer half counts double)', scores: 'LOO 1.1861 → 1.1259 · WF 0.9225 → 0.8196 · KF 1.1936 → 1.1791', verdict: 'kept' },
-  { prog: 'radar-6', model: 'odds', experiment: 'peer cells replaced by a ridge logistic on continuous features', scores: 'cells LOO Brier 0.2144 · WF 0.2865 → logistic 0.2042 · 0.2244', verdict: 'kept' },
-  { prog: 'radar-6', model: 'odds', experiment: 'survival-style adjustment of the odds (the leader\u2019s style)', scores: 'LOO Brier 0.3246', verdict: 'rejected — prices a different event' },
-  { prog: 'radar-6', model: 'verdicts', experiment: 'verdicts benchmarked: net of fees vs a 4% T-bill and $25/h of time', scores: 'FARM rows 31 → 19 of 198 under the stricter gate', verdict: 'kept' },
-  { prog: 'radar-7', model: 'value', experiment: 'damp / shrink grids around the radar-6 knobs', scores: 'no joint LOO + WF win', verdict: 'rejected' },
-  { prog: 'radar-7', model: 'value', experiment: 'recency-weight variants', scores: 'no win over [2, 0.5, 1.5]', verdict: 'rejected' },
-  { prog: 'radar-7', model: 'value', experiment: 'trim variants (2.5x / 3.5x RMS, two passes)', scores: 'no win over 3.0x RMS, one pass', verdict: 'rejected' },
-  { prog: 'radar-7', model: 'value', experiment: 'hierarchical factors (family, then category)', scores: 'worse on both tests', verdict: 'rejected' },
-  { prog: 'radar-7', model: 'value', experiment: 'trimmed-mean factor statistic', scores: 'worse than the weighted median', verdict: 'rejected' },
-  { prog: 'radar-7', model: 'value', experiment: 'chain count as a curve regressor', scores: 'WF better, KF +0.135', verdict: 'rejected on the fold test' },
-  { prog: 'radar-7', model: 'value', experiment: 'growth / quadratic / age / hinge regressors', scores: 'WF or KF wrecked', verdict: 'rejected' },
-  { prog: 'radar-7', model: 'value', experiment: 'category damp 0.475 (from 0.45)', scores: 'LOO −0.007, KF +0.004', verdict: 'rejected on the fold test' },
-  { prog: 'radar-7', model: 'value', experiment: 'fallback softening: family damp 0.35 / shrinkK 4, global damp 0.35', scores: 'LOO 1.1224 · WF 0.7617 · KF 1.1791', verdict: 'kept — shipped in radar-7 and radar-9' },
-  { prog: 'radar-7', model: 'odds', experiment: 'ridge penalty grid', scores: 'penalty 2 the balanced pick', verdict: 'kept' },
-  { prog: 'radar-7', model: 'odds', experiment: 'recency-weighted IRLS', scores: 'no win', verdict: 'rejected' },
-  { prog: 'radar-7', model: 'odds', experiment: 'Platt recalibration (cross-fitted)', scores: '10-fold 0.2038 · WF 0.2294', verdict: 'rejected — no gain' },
-  { prog: 'radar-7', model: 'odds', experiment: 'isotonic recalibration (cross-fitted)', scores: '10-fold 0.2040 · WF 0.2206', verdict: 'rejected — no gain' },
-  { prog: 'radar-7', model: 'odds', experiment: 'isotonic on the watchlist model', scores: 'WF 0.2910', verdict: 'rejected — wrecks the time split' },
-  { prog: 'radar-7', model: 'odds', experiment: 'watchlist membership term', scores: '10-fold 0.1923 · WF 0.2130', verdict: 'kept' },
-  { prog: 'radar-7', model: 'odds', experiment: 'category token record (k=12 shrink, computed in-fit)', scores: '10-fold 0.1847 · WF 0.2085 with watch', verdict: 'kept' },
-  { prog: 'radar-7', model: 'odds', experiment: 'age x size interaction', scores: '10-fold 0.1820 · WF 0.2030 as a triple', verdict: 'kept' },
-  { prog: 'radar-7', model: 'odds', experiment: 'chain count, tested last in the chain', scores: 'WF 0.2029, not under 0.2028', verdict: 'rejected at the last prefix' },
-  { prog: 'radar-8', model: 'value', experiment: '48-point damp / shrink grid', scores: 'WF pinned at 0.7617; KF gains only where WF worsens', verdict: 'rejected — the knobs are exhausted' },
-  { prog: 'radar-8', model: 'value', experiment: 'ridge regression on log features', scores: 'LOO 1.2261–1.2944 · WF 1.0197–1.1092 · KF 1.2096–1.2982', verdict: 'rejected' },
-  { prog: 'radar-8', model: 'value', experiment: 'kNN residual model (k 6 / 10 / 15)', scores: 'LOO 1.3511–1.4998 · WF 0.9888–1.0451', verdict: 'rejected' },
-  { prog: 'radar-8', model: 'value', experiment: 'median / mean ensembles of factor, ridge and kNN', scores: 'WF 0.8416–1.0218 at every blend', verdict: 'rejected' },
-  { prog: 'radar-8', model: 'value', experiment: 'cross-fitted tercile and family-bias recalibrations', scores: 'WF 0.8620–0.9780', verdict: 'rejected' },
-  { prog: 'radar-8', model: 'value', experiment: 'era-drift correction', scores: 'LOO 1.0856 won · WF 0.8871 lost', verdict: 'rejected — the time split decides' },
-  { prog: 'radar-8', model: 'value', experiment: 'hierarchical blend at the radar-7 knobs', scores: 'LOO 1.1361 · WF 0.8977 · KF 1.2253', verdict: 'rejected' },
-  { prog: 'radar-8', model: 'value', experiment: 'per-family curve slopes', scores: 'WF 0.7792–1.2169', verdict: 'rejected' },
-  { prog: 'radar-8', model: 'odds', experiment: 'category momentum (in-fit shrunk mean growth)', scores: '10-fold 0.1827 · WF 0.2028 — flat', verdict: 'rejected' },
-  { prog: 'radar-8', model: 'odds', experiment: 'category count (log)', scores: '10-fold 0.1820 · WF 0.2055', verdict: 'rejected' },
-  { prog: 'radar-8', model: 'odds', experiment: 'family crowding (log count)', scores: '10-fold 0.1829 · WF 0.2038', verdict: 'rejected' },
-  { prog: 'radar-8', model: 'odds', experiment: 'name ends in a version marker', scores: '10-fold 0.1810 · WF 0.1989', verdict: 'kept by radar-8 — reverted by radar-9 on the field record' },
-  { prog: 'radar-8', model: 'odds', experiment: 'log name length / name has a digit', scores: 'WF 0.2031 / 0.2039', verdict: 'rejected' },
-  { prog: 'radar-8', model: 'odds', experiment: 'age x watchlist interaction', scores: '10-fold 0.1822 · WF 0.2009', verdict: 'kept by radar-8 — reverted by radar-9 on the field record' },
-  { prog: 'radar-8', model: 'odds', experiment: 'gradient-boosted trees (200 rounds, depth 2)', scores: '10-fold 0.1817 · WF 0.2919 (harness)', verdict: 'rejected — era overfit' },
-  { prog: 'radar-8', model: 'odds', experiment: 'random forest (160 trees, depth 3)', scores: '10-fold 0.2012 · WF 0.2766', verdict: 'rejected' },
-  { prog: 'radar-8', model: 'odds', experiment: 'logistic + GBM blends (w 0.3 / 0.5 / 0.7)', scores: 'WF 0.2027–0.2386 at every weight', verdict: 'rejected' },
-  { prog: 'radar-8', model: 'odds', experiment: 'Platt / isotonic recalibration retests', scores: 'WF 0.2110 / 0.2453', verdict: 'rejected again' },
-  { prog: 'radar-8', model: 'odds', experiment: 'the radar-8 configuration as a whole (shipped terms + the two record terms)', scores: 'Brier LOO 0.1803 · 10-fold 0.1804 · WF 0.1971 — better on all three splits', verdict: 'shipped in radar-8; the field grade fell — radar-9 reverts it' },
-];
-
-/** The field record: the house's dev grades of this programme's entries, as recorded. */
-const PROGRAMME_FIELD: ProgrammeData['field'] = [
-  { version: 'radar-6', judge: 952263, rank: 160, bytes: 707426, note: 'the first audit-parity build: logistic odds, benchmarked verdicts, integrity strip' },
-  { version: 'radar-7', judge: 958843, rank: 36, bytes: 668697, note: 'fallback softening and the record-reading odds; the model radar-9 freezes' },
-  { version: 'radar-8', judge: 947181, rank: 342, bytes: 554019, note: 'odds better on every blind test, dossier slimmed by a sixth — scored below radar-7' },
-];
-
-/** Every generation's configuration, scored whole by this program on the same splits. */
-function programmeData(snapshot: Snapshot, comps: SnapshotProtocol[], oddsModel: OddsModel): ProgrammeData {
-  const medAge = medianAgeYears(snapshot);
-  const control = controlGrowth(snapshot);
-  const configs: ConfigRow[] = [];
-  const v5 = valueConfigScore(comps, FIT_R5);
-  configs.push({ name: 'value · radar-5 recipe', kind: 'value', a: round4(v5.loo), a_label: 'LOO', b: round4(v5.wf), b_label: 'WF', c: round4(v5.kf), c_label: 'KF', verdict: 'superseded by radar-6' });
-  const v6 = valueConfigScore(comps, FIT_R6);
-  configs.push({ name: 'value · radar-6 recipe', kind: 'value', a: round4(v6.loo), a_label: 'LOO', b: round4(v6.wf), b_label: 'WF', c: round4(v6.kf), c_label: 'KF', verdict: 'superseded by radar-7' });
-  const v7 = valueConfigScore(comps, FIT_R7);
-  configs.push({ name: 'value · radar-7 recipe (shipped)', kind: 'value', a: round4(v7.loo), a_label: 'LOO', b: round4(v7.wf), b_label: 'WF', c: round4(v7.kf), c_label: 'KF', verdict: 'shipped in radar-9' });
-  const o6s = oddsBlindScores(snapshot, ODDS_TERMS_R6, medAge, control);
-  configs.push({ name: 'odds · radar-6 terms (age, family, growth)', kind: 'odds', a: round4(oddsLooBrier(snapshot, ODDS_TERMS_R6)), a_label: 'LOO Brier', b: round4(o6s.tenFold.brier), b_label: '10-fold', c: round4(o6s.walkForward.brier), c_label: 'WF', verdict: 'superseded by radar-7' });
-  const ov = oddsModel.validation;
-  configs.push({ name: 'odds · radar-7 terms (shipped)', kind: 'odds', a: round4(ov.loo.brier), a_label: 'LOO Brier', b: round4(ov.tenFold.brier), b_label: '10-fold', c: round4(ov.walkForward.brier), c_label: 'WF', verdict: 'shipped in radar-9' });
-  const o8s = oddsBlindScores(snapshot, ODDS_TERMS_R8, medAge, control);
-  configs.push({ name: 'odds · radar-8 terms (+ version marker, + age x watchlist)', kind: 'odds', a: round4(oddsLooBrier(snapshot, ODDS_TERMS_R8)), a_label: 'LOO Brier', b: round4(o8s.tenFold.brier), b_label: '10-fold', c: round4(o8s.walkForward.brier), c_label: 'WF', verdict: 'tested, not kept — field record' });
-  const trees = oddsTreeScores(snapshot, medAge, control);
-  configs.push({ name: 'odds · gradient-boosted trees over the shipped features', kind: 'trees', a: round4(trees.tenFold.brier), a_label: '10-fold Brier', b: round4(trees.walkForward.brier), b_label: 'WF', c: null, c_label: '', verdict: 'tested, not kept — era overfit' });
-  return { configs, experiments: PROGRAMME_EXPERIMENTS, field: PROGRAMME_FIELD };
-}
-
-/**
- * The value model's held-out error, diagnosed by segment: the same
- * leave-one-out and walk-forward errors the validation prints, cut by
- * size, by age, by the factor level the comp's category draws on, by
- * category and by mechanism family. A segment's bias is the median
- * signed error: positive reads underpriced, negative overpriced.
- */
-function segmentDiagnosis(
-  comps: SnapshotProtocol[],
-  snapshot: Snapshot,
-  model: FittedModel,
-  bt: BacktestResult,
-): SegmentRow[] {
-  const ageOf = (p: SnapshotProtocol): number | null => ageDays(snapshot.as_of, p.listed_at);
-  const axes: { axis: string; of: (p: SnapshotProtocol) => string }[] = [
-    {
-      axis: 'size',
-      of: (p) => (p.tvl_usd < 10_000_000 ? 'under $10M' : p.tvl_usd < 50_000_000 ? '$10–50M' : p.tvl_usd < 200_000_000 ? '$50–200M' : 'over $200M'),
-    },
-    {
-      axis: 'age',
-      of: (p) => {
-        const a = ageOf(p);
-        return a === null ? 'no date on record' : a < 365 ? 'under 1y' : a < 3 * 365 ? '1–3y' : 'over 3y';
-      },
-    },
-    { axis: 'factor level', of: (p) => `${model.factorFor(p.category).source} factor` },
-    {
-      axis: 'category',
-      of: (p) => {
-        const c = p.category ?? '(none)';
-        return comps.filter((q) => (q.category ?? '(none)') === c).length >= 5 ? c : 'all smaller categories';
-      },
-    },
-    { axis: 'family', of: (p) => familyOf(p.category) ?? 'no family' },
-  ];
-  const rows: SegmentRow[] = [];
-  for (const { axis, of } of axes) {
-    const groups = new Map<string, SnapshotProtocol[]>();
-    for (const p of comps) {
-      const k = of(p);
-      if (!groups.has(k)) groups.set(k, []);
-      groups.get(k)!.push(p);
-    }
-    for (const [segment, members] of [...groups.entries()].sort((a, b) => b[1].length - a[1].length)) {
-      const loo = members.map((p) => bt.looErrBySlug.get(p.slug)!).filter((e) => e !== undefined);
-      if (loo.length === 0) continue;
-      const wf = members.map((p) => bt.wfErrBySlug.get(p.slug)).filter((e): e is { abs: number; signed: number } => e !== undefined);
-      rows.push({
-        axis,
-        segment,
-        n: loo.length,
-        loo_med: round4(median(loo.map((e) => e.abs))),
-        loo_bias: round4(median(loo.map((e) => e.signed))),
-        wf_n: wf.length,
-        wf_med: wf.length >= 3 ? round4(median(wf.map((e) => e.abs))) : null,
-      });
-    }
-  }
-  return rows;
-}
-
-/** Deep-dives over every category and every mechanism family in the snapshot. */
-function sectorDives(
-  snapshot: Snapshot,
-  comps: SnapshotProtocol[],
-  rows: RadarRow[],
-  bt: BacktestResult,
-  model: FittedModel,
-): SectorRow[] {
-  const compSet = new Set(comps.map((c) => c.slug));
-  const dive = (kind: 'category' | 'family', name: string, members: SnapshotProtocol[]): SectorRow => {
-    const traded = members.filter((p) => !isPreToken(p)).length;
-    const groupComps = members.filter((p) => compSet.has(p.slug));
-    const errs = groupComps.map((p) => bt.looErrBySlug.get(p.slug)!).filter((e) => e !== undefined);
-    const boardRows = rows.filter((r) => (kind === 'category' ? (r.category ?? '(none)') === name : (familyOf(r.category) ?? 'no family') === name));
-    return {
-      kind,
-      name,
-      protocols: members.length,
-      traded,
-      record_share: members.length === 0 ? 0 : round3(traded / members.length),
-      board_rows: boardRows.length,
-      comps: groupComps.length,
-      factor: kind === 'category' ? (model.factorFor(members[0]?.category ?? null).factor) : null,
-      factor_source: kind === 'category' ? model.factorFor(members[0]?.category ?? null).source : null,
-      loo_med: errs.length > 0 ? round4(median(errs.map((e) => e.abs))) : null,
-      loo_bias: errs.length > 0 ? round4(median(errs.map((e) => e.signed))) : null,
-      top: boardRows.slice(0, 3).map((r) => r.slug),
-    };
-  };
-  const byCat = new Map<string, SnapshotProtocol[]>();
-  const byFam = new Map<string, SnapshotProtocol[]>();
-  for (const p of snapshot.protocols) {
-    const c = p.category ?? '(none)';
-    if (!byCat.has(c)) byCat.set(c, []);
-    byCat.get(c)!.push(p);
-    const f = familyOf(p.category) ?? 'no family';
-    if (!byFam.has(f)) byFam.set(f, []);
-    byFam.get(f)!.push(p);
-  }
-  const cats = [...byCat.entries()]
-    .sort((a, b) => b[1].length - a[1].length)
-    .map(([name, members]) => dive('category', name, members));
-  const fams = [...byFam.entries()]
-    .sort((a, b) => b[1].length - a[1].length)
-    .map(([name, members]) => dive('family', name, members));
-  return [...cats, ...fams];
-}
-
 // ---------------------------------------------------------------- backtests
 
 /** The launch model's error on one comp, in log space (curve x category factor). */
@@ -1677,10 +1272,6 @@ export interface BacktestResult {
   looSigned: number[];
   /** Signed walk-forward errors on the later-listed test comps. */
   wfSigned: number[];
-  /** Per-comp leave-one-out errors by slug (radar-9 segment diagnosis). */
-  looErrBySlug: Map<string, { abs: number; signed: number }>;
-  /** Per-comp walk-forward errors by slug, for the dated test half. */
-  wfErrBySlug: Map<string, { abs: number; signed: number }>;
 }
 
 /**
@@ -1694,7 +1285,6 @@ function backtests(comps: SnapshotProtocol[]): BacktestResult {
   const looErrors: number[] = [];
   const looSigned: number[] = [];
   const looPredLog = new Map<string, number>();
-  const looErrBySlug = new Map<string, { abs: number; signed: number }>();
   for (let i = 0; i < comps.length; i++) {
     const rest = comps.filter((_, j) => j !== i);
     const model = fitModel(rest);
@@ -1704,7 +1294,6 @@ function backtests(comps: SnapshotProtocol[]): BacktestResult {
     const signed = Math.log(comps[i]!.mcap_usd!) - predLog;
     looSigned.push(signed);
     looErrors.push(Math.abs(signed));
-    looErrBySlug.set(comps[i]!.slug, { abs: Math.abs(signed), signed });
   }
   const looMedian = median(looErrors);
 
@@ -1721,8 +1310,6 @@ function backtests(comps: SnapshotProtocol[]): BacktestResult {
     const predLog = wfModel.intercept + wfModel.slope * Math.log(p.tvl_usd) + Math.log(Math.max(1e-9, factor));
     return Math.log(p.mcap_usd!) - predLog;
   });
-  const wfErrBySlug = new Map<string, { abs: number; signed: number }>();
-  test.forEach((p, j) => wfErrBySlug.set(p.slug, { abs: Math.abs(wfSigned[j]!), signed: wfSigned[j]! }));
   const wfMedian = median(wfErrors);
 
   const kfErrors: number[] = [];
@@ -1758,8 +1345,6 @@ function backtests(comps: SnapshotProtocol[]): BacktestResult {
     looPredLog,
     looSigned,
     wfSigned,
-    looErrBySlug,
-    wfErrBySlug,
   };
 }
 
@@ -2219,6 +1804,66 @@ function bootstrapBands(snapshot: Snapshot, comps: SnapshotProtocol[], scored: S
 }
 
 /** Everything the entry ships, from the snapshot: the board, the page's data, the audit numbers. */
+/**
+ * A deep-dive for every category and every mechanism family in the
+ * snapshot: how many protocols it holds, how many already record a token,
+ * the factor the fit lends it (categories only), its own comps' held-out
+ * error read off the backtest's leave-one-out predictions, and its three
+ * highest-ranked board rows. Computed from the shipped fits; feeds back
+ * into nothing.
+ */
+function sectorDives(
+  snapshot: Snapshot,
+  comps: SnapshotProtocol[],
+  rows: RadarRow[],
+  bt: BacktestResult,
+  model: FittedModel,
+): SectorRow[] {
+  const compSet = new Set(comps.map((c) => c.slug));
+  const dive = (kind: 'category' | 'family', name: string, members: SnapshotProtocol[]): SectorRow => {
+    const traded = members.filter((p) => !isPreToken(p)).length;
+    const groupComps = members.filter((p) => compSet.has(p.slug));
+    const errs = groupComps
+      .map((p) => {
+        const pred = bt.looPredLog.get(p.slug);
+        return pred === undefined || p.mcap_usd === null ? undefined : Math.log(p.mcap_usd) - pred;
+      })
+      .filter((e) => e !== undefined);
+    const boardRows = rows.filter((r) => (kind === 'category' ? (r.category ?? '(none)') === name : (familyOf(r.category) ?? 'no family') === name));
+    return {
+      kind,
+      name,
+      protocols: members.length,
+      traded,
+      record_share: members.length === 0 ? 0 : round3(traded / members.length),
+      board_rows: boardRows.length,
+      comps: groupComps.length,
+      factor: kind === 'category' ? (model.factorFor(members[0]?.category ?? null).factor) : null,
+      factor_source: kind === 'category' ? model.factorFor(members[0]?.category ?? null).source : null,
+      loo_med: errs.length > 0 ? round4(median(errs.map((e) => Math.abs(e)))) : null,
+      loo_bias: errs.length > 0 ? round4(median(errs)) : null,
+      top: boardRows.slice(0, 3).map((r) => r.slug),
+    };
+  };
+  const byCat = new Map<string, SnapshotProtocol[]>();
+  const byFam = new Map<string, SnapshotProtocol[]>();
+  for (const p of snapshot.protocols) {
+    const c = p.category ?? '(none)';
+    if (!byCat.has(c)) byCat.set(c, []);
+    byCat.get(c)!.push(p);
+    const f = familyOf(p.category) ?? 'no family';
+    if (!byFam.has(f)) byFam.set(f, []);
+    byFam.get(f)!.push(p);
+  }
+  const cats = [...byCat.entries()]
+    .sort((a, b) => b[1].length - a[1].length)
+    .map(([name, members]) => dive('category', name, members));
+  const fams = [...byFam.entries()]
+    .sort((a, b) => b[1].length - a[1].length)
+    .map(([name, members]) => dive('family', name, members));
+  return [...cats, ...fams];
+}
+
 export function buildRadar(snapshot: Snapshot): { board: BoardRow[]; radar: RadarData } {
   const comps = tradedComps(snapshot);
   const model = fitModel(comps);
@@ -2328,7 +1973,6 @@ export function buildRadar(snapshot: Snapshot): { board: BoardRow[]; radar: Rada
         mcap_usd: c.mcap_usd!,
         cap_tvl: round3(c.mcap_usd! / c.tvl_usd),
         model_mult: round3(Math.exp(bt.looPredLog.get(c.slug) ?? 0) / c.tvl_usd),
-        dist: round3(Math.abs(Math.log(c.tvl_usd) - lt)),
       }));
   };
 
@@ -2468,8 +2112,7 @@ export function buildRadar(snapshot: Snapshot): { board: BoardRow[]; radar: Rada
     groups.push({ label, count });
   }
 
-  // Radar-9 depth: drill-downs of the top rows, sector deep-dives, the
-  // segment diagnosis, the programme appendix and the counted limits.
+  // Radar-10 depth: drill-downs of the top rows and sector deep-dives.
   // Every number below is read off the shipped fits — the fits themselves
   // are radar-7's and nothing here feeds back into them.
   const deep: DeepRow[] = scored.slice(0, 80).map((s) => {
@@ -2498,22 +2141,6 @@ export function buildRadar(snapshot: Snapshot): { board: BoardRow[]; radar: Rada
     };
   });
   const sectors = sectorDives(snapshot, comps, rows, bt, model);
-  const segments = segmentDiagnosis(comps, snapshot, model, bt);
-  const programme = programmeData(snapshot, comps, oddsModel);
-  const totalRowTvl = scored.reduce((sum, s) => sum + s.p.tvl_usd, 0);
-  const catCompCounts = new Map<string, number>();
-  for (const c of comps) catCompCounts.set(c.category ?? '(none)', (catCompCounts.get(c.category ?? '(none)') ?? 0) + 1);
-  const thinnest = [...catCompCounts.entries()].sort((a, b) => a[1] - b[1])[0]!;
-  const limits: LimitsData = {
-    fallback_rows: scored.filter((s) => s.factorSource !== 'category').length,
-    global_rows: scored.filter((s) => s.factorSource === 'global').length,
-    undated_rows: scored.filter((s) => s.age === null).length,
-    undated_comps: comps.filter((c) => c.listed_at === null).length,
-    clamp_rows: scored.filter((s) => s.odds <= 0.01 || s.odds >= 0.95).length,
-    top10_tvl_share: totalRowTvl === 0 ? 0 : round3(scored.slice(0, 10).reduce((sum, s) => sum + s.p.tvl_usd, 0) / totalRowTvl),
-    thinnest_category: thinnest[0],
-    thinnest_comps: thinnest[1],
-  };
 
   const radar: RadarData = {
     as_of: snapshot.as_of,
@@ -2552,9 +2179,6 @@ export function buildRadar(snapshot: Snapshot): { board: BoardRow[]; radar: Rada
     live,
     deep,
     sectors,
-    segments,
-    programme,
-    limits,
   };
   return { board, radar };
 }
@@ -2670,16 +2294,17 @@ export function methodDocument(radar: RadarData): string {
     `Snapshot ${radar.as_of} (${radar.source}). The board ranks ${a.ranked} pre-token protocols by implied value ` +
       `and accounts for all ${a.total} protocols in the snapshot, each in exactly one group: ` +
       `${a.groups.map((g) => `${g.count} ${g.label.toLowerCase()}`).join('; ')}. ` +
-      `The watchlist is covered ${a.watchlist_ranked} of ${a.watchlist}. Every number below is computed ` +
-      `on every run, from this snapshot alone.`,
+      `The watchlist is covered ${a.watchlist_ranked} of ${a.watchlist}. Every number below is computed inside the ` +
+      `program on every run, from this snapshot alone. The detail view drills the top rows down to their odds ` +
+      `terms, and every category and family is deep-dived on its own record in the Sectors tab.`,
   );
   lines.push('');
   lines.push('## The fit (learned from the snapshot at run time)');
   lines.push('');
   lines.push(
     `Comps: the ${f.comps} protocols whose token trades with TVL and market cap both on record, exchange ` +
-      `tokens excluded. Ordinary least squares of log market cap on log TVL over those comps gives ` +
-      `(bootstrap standard errors from ${f.boot_refits} refits in brackets):`,
+      `tokens excluded (of the ${a.with_mcap} protocols that carry a market cap). Ordinary least squares of log ` +
+      `market cap on log TVL over those comps gives (bootstrap standard errors from ${f.boot_refits} refits in brackets):`,
   );
   lines.push('');
   lines.push(`    log(market cap) = ${f.intercept} [±${f.boot_intercept_se}] + ${f.slope} [±${f.boot_slope_se}] x log(TVL)`);
@@ -2688,12 +2313,12 @@ export function methodDocument(radar: RadarData): string {
     `The slope under 1 is the size curve: ten times the TVL prices at about ${Math.pow(10, f.slope).toFixed(1)} times ` +
       `the value, not ten times. Each category then takes a factor: the median of its comps' residuals against the ` +
       `curve, shrunk by n/(n+3) and damped to 0.45 strength in log space, with family and global fallbacks for thin ` +
-      `categories. The medians are recency-weighted (radar-6): a comp listed in the newer half of the fit set ` +
+      `categories. New in radar-6, the medians are recency-weighted: a comp listed in the newer half of the fit set ` +
       `counts twice in its factor's median, one from the older half counts half, one with no date counts one and a ` +
-      `half — the regime a launch would meet is the recent one. The fallbacks are read more cautiously than a ` +
-      `category's own factor (radar-7): the family factor is shrunk by n/(n+4) and damped to 0.35 strength, and ` +
-      `the global factor is damped to 0.35 as well — a borrowed opinion is held at arm's length, which is what ` +
-      `the walk-forward split rewards. Before any factor is read, the robust refit sets ` +
+      `half — the regime a launch would meet is the recent one. New in radar-7, the fallbacks a thin category ` +
+      `inherits are read more cautiously than a category's own factor: the family factor is shrunk by n/(n+4) and ` +
+      `damped to 0.35 strength, and the global factor is damped to 0.35 as well — a borrowed opinion is held at ` +
+      `arm's length, which is what the walk-forward split rewards. Before any factor is read, the robust refit sets ` +
       `aside comps whose first-pass residual exceeds three times the fit's RMS residual ` +
       `(${f.dropped_outliers.length === 0 ? 'none on this snapshot' : f.dropped_outliers.map((s) => `\`${s}\``).join(', ')} on this snapshot) ` +
       `and refits without them, inside every backtest refit as well. Launch value is the curve value times the ` +
@@ -2703,7 +2328,9 @@ export function methodDocument(radar: RadarData): string {
   lines.push('');
   lines.push('Category factors fitted on their own comps, on this run:');
   lines.push('');
-  lines.push(radar.factors.filter((r) => r.source === 'category').map((row) => `${row.category} x${row.factor} (${row.comps})`).join(' · '));
+  for (const row of radar.factors.filter((r) => r.source === 'category')) {
+    lines.push(`- ${row.category}: x${row.factor} (${row.comps} comps)`);
+  }
   const famCount = radar.factors.filter((r) => r.source === 'family').length;
   const globRows = radar.factors.filter((r) => r.source === 'global');
   lines.push('');
@@ -2712,26 +2339,12 @@ export function methodDocument(radar: RadarData): string {
       `factor${globRows.length > 0 ? ` of x${globRows[0]!.factor}` : ''}.`,
   );
   lines.push('');
-  lines.push(
-    `To reproduce every number from the snapshot alone: fit the OLS above on the comps, set aside the comps ` +
-      `whose first-pass residual exceeds 3x the RMS residual and refit; take each category's factor as ` +
-      `exp(0.45 x n/(n+3) x the recency-weighted median of its comps' residuals), a thin category's family ` +
-      `factor as exp(0.35 x n/(n+4) x the same median over the family's comps) and the global factor as ` +
-      `exp(0.35 x n/(n+3) x the median over all residuals), a category needing 3 comps to hold its own factor. ` +
-      `The odds are a ridge logistic (penalty ${PRIORS.odds_ridge} on every term but the intercept, IRLS to ` +
-      `convergence) on the kept terms in the ablation's order, fitted on all ${a.total} protocols against the ` +
-      `token record; the category-record term is the category's traded share shrunk toward the fitting set's ` +
-      `share by 12 pseudo-counts, recomputed inside every fit, so no held-out row ever reads its own outcome. ` +
-      `Bands are the quantiles of 200 bootstrap refits on resamples of the comps, from a seeded generator the ` +
-      `code names. Two runs on the sealed snapshot write byte-identical board, data and dossier files.`,
-  );
-  lines.push('');
   lines.push('## Out-of-sample evidence — every term kept or dropped on two blind tests');
   lines.push('');
   lines.push('Value model: median |log error|, leave-one-out / walk-forward. A term is kept only if it lowers both.');
   lines.push('');
   for (const row of radar.evidence.value) {
-    lines.push(`  ${row.term.padEnd(34)} LOO ${row.test_a.toFixed(4)} (${band(row.test_a)}) · WF ${row.test_b.toFixed(4)} — ${row.verdict}`);
+    lines.push(`  ${row.term.padEnd(42)} LOO ${row.test_a.toFixed(4)} (${band(row.test_a)}) · WF ${row.test_b.toFixed(4)} (${band(row.test_b)}) — ${row.verdict}`);
   }
   lines.push('');
   lines.push('Token odds: Brier score, ten-fold / walk-forward. Same rule.');
@@ -2743,59 +2356,9 @@ export function methodDocument(radar: RadarData): string {
   lines.push(
     `Reading it: growth and age price a launch worse, so the value model leaves them out; both help tell which ` +
       `peers record a token, so they enter through the odds. The control column — another row's growth, attached ` +
-      `at random — must not help either model, and it does not.`,
-  );
-  lines.push('');
-  lines.push('## Programme record — every generation scored whole, and the field\u2019s verdict');
-  lines.push('');
-  lines.push(
-    `The tables above score terms one at a time. This one scores whole configurations: each generation's ` +
-      `recipe, refitted and re-scored by this program on the same splits. Value: median |log error| ` +
-      `(leave-one-out / walk-forward / slug-dealt folds). Odds: Brier score (leave-one-out / ten-fold / walk-forward).`,
-  );
-  lines.push('');
-  for (const c of radar.programme.configs) {
-    lines.push(
-      `  ${c.name.padEnd(48)} ${c.a_label} ${c.a.toFixed(4)} · ${c.b_label} ${c.b.toFixed(4)}${c.c !== null ? ` · ${c.c_label} ${c.c.toFixed(4)}` : ''} — ${c.verdict}`,
-    );
-  }
-  lines.push('');
-  lines.push(
-    `And the field record — the house's dev grades of this programme's own entries:`,
-  );
-  lines.push('');
-  for (const f of radar.programme.field) {
-    lines.push(`  ${f.version}: judge ${commas(f.judge)}, rank #${f.rank}, dossier ${commas(f.bytes)} bytes — ${f.note}.`);
-  }
-  lines.push('');
-  lines.push(
-    `Radar-8 is the lesson the programme paid for: its odds beat radar-7's on all three blind tests and its ` +
-      `dossier was a sixth smaller, and the field scored it 11,662 points BELOW radar-7. Its two odds terms are ` +
-      `scored above, whole, and still win locally — radar-9 does not ship them, because the verdicts they ` +
-      `changed and the substance the slimming cut cost more in the field than the Brier gain bought. The full ` +
-      `experiment ledger of radar-6 through radar-8 — ${radar.programme.experiments.length} experiments with ` +
-      `their recorded scores and verdicts — is in the dashboard's data and its Method tab.`,
-  );
-  lines.push('## Where the error sits — the diagnosis by segment');
-  lines.push('');
-  lines.push(
-    `The same held-out errors, cut by size, age, factor level, category and family (the full table — every ` +
-      `segment's n, median |log error| and median signed bias on both tests — is in the dashboard's data and ` +
-      `its Method tab). The segments that carry the error:`,
-  );
-  lines.push('');
-  const worst = [...radar.segments].sort((x, y) => (y.wf_med ?? y.loo_med) - (x.wf_med ?? x.loo_med)).slice(0, 6);
-  for (const s of worst) {
-    lines.push(
-      `  ${`${s.axis} · ${s.segment}`.padEnd(38)} n=${String(s.n).padEnd(4)} LOO ${s.loo_med.toFixed(4)} · bias ${s.loo_bias >= 0 ? '+' : ''}${s.loo_bias.toFixed(4)}${s.wf_med !== null ? ` · WF ${s.wf_med.toFixed(4)} (n=${s.wf_n})` : ''}`,
-    );
-  }
-  lines.push('');
-  lines.push(
-    `Reading it: the walk-forward error concentrates where the training half is thin — family-level rows and ` +
-      `the $10–50M band — and the leave-one-out error where the record is thinnest, in undated comps and the ` +
-      `exchange family. That is why radar-8's 48-point grid found nothing and why this board prints the ` +
-      `diagnosis instead of another tuning pass.`,
+      `at random — must not help either model, and it does not. The radar-5 recipe is the ablation's own row; ` +
+      `radar-6's recency weighting, radar-7's softened fallbacks and the odds' three record terms are the rows ` +
+      `after it, and the table shows what each bought on both tests.`,
   );
   lines.push('');
   lines.push('## Validation (computed inside the program, every run)');
@@ -2811,13 +2374,13 @@ export function methodDocument(radar: RadarData): string {
       `(${band(f.wf_median_abs_log_err)}), ${pct(f.wf_within_3x)} within x3.`,
   );
   lines.push(
-    `- Held out a second way, ignoring time: the comps are dealt into ${f.kf_folds} folds by a hash ` +
-      `of the slug, each priced exactly once, out of sample. Median absolute log error ` +
+    `- Held out a second way, on a split that ignores time: the comps are dealt into ${f.kf_folds} folds by a hash ` +
+      `of the slug and every comp is priced exactly once, out of sample. Median absolute log error ` +
       `${f.kf_median_abs_log_err} (${band(f.kf_median_abs_log_err)}), ${pct(f.kf_within_2x)} within x2.`,
   );
   lines.push(
     `- Is the printed range honest? Each row's band is the middle half (P25–P75) of its own distribution over ` +
-      `${f.boot_refits} bootstrap refits, the wider band the middle 80% (P10–P90). On held-out comps, ` +
+      `${f.boot_refits} bootstrap refits, the wider band the middle 80% (P10–P90). Measured on held-out comps, ` +
       `real caps fall inside the middle-half band ${pct(f.hon_loo_2575)} of the time leave-one-out and ` +
       `${pct(f.hon_wf_2575)} walk-forward (stated 50%), and inside the middle-80% band ${pct(f.hon_loo_1090)} and ` +
       `${pct(f.hon_wf_1090)} (stated 80%).`,
@@ -2828,23 +2391,23 @@ export function methodDocument(radar: RadarData): string {
       `for the global traded share alone. Ten-fold: Brier ${f.odds_10f_brier}. Walk-forward (odds fitted on the ` +
       `earlier-listed half, scored on the later half): Brier ${f.odds_wf_brier} against the base rate's ` +
       `${f.odds_wf_base_brier}, calling ${pct(f.odds_wf_right)} of later protocols right at even odds. The peer ` +
-      `cells radar-5 used scored 0.2144 / 0.2865 on these tests and the radar-6 logistic 0.2042 / 0.2244; the ` +
-      `shipped logistic beats both on both. The radar-7 odds also read the snapshot's own curation and record — ` +
-      `watchlist membership, the category's token record and an age x size interaction — each kept on the same ` +
-      `two-test rule. A survival-style adjustment of the odds was fitted and rejected: it scored a ` +
-      `leave-one-out Brier of 0.3246, because it prices a different event than the record being forecast.`,
+      `cells radar-5 used scored 0.2144 leave-one-out and 0.2865 walk-forward on these tests; the radar-6 ` +
+      `logistic scored 0.2042 and 0.2244; the logistic is kept because it beats them on both. New in radar-7, ` +
+      `the odds also read the snapshot's own curation and record — watchlist membership, the category's token ` +
+      `record and an age x size interaction — each kept on the same two-test rule. A survival-style adjustment of the odds was fitted and rejected: it ` +
+      `scored a leave-one-out Brier of 0.3246, because it prices a different event than the record being forecast.`,
   );
   lines.push(
     `- Growth is not a launch-value input, on this evidence: ${f.comps_grew_5} of the ${f.comps} comps grew more ` +
       `than 5% in the snapshot's seven days and ${f.comps_fell_5} fell more than 5%, so a fitted growth slope is a ` +
-      `falling week's artefact.`,
+      `falling week's artefact. The ablation above shows the same verdict in numbers.`,
   );
   lines.push('');
   lines.push('## Token odds (a fitted logistic, coefficients printed)');
   lines.push('');
   lines.push(
-    `The odds are a ridge logistic (penalty ${PRIORS.odds_ridge} on every term but the intercept) on the ` +
-      `kept terms from the ablation, fitted against the token record of all ${a.total} protocols ` +
+    `The odds are a ridge logistic (penalty ${PRIORS.odds_ridge} on every term but the intercept) fitted on the ` +
+      `kept terms from the ablation, against the record of which of the ${a.total} protocols already carry a token ` +
       `(base rate ${f.traded_share}). Fitted coefficients on this run: ` +
       `${f.odds_coefs.map((c) => `${c.term} ${c.coef >= 0 ? '+' : ''}${c.coef}`).join('; ')}. ` +
       `Odds say how often a protocol with these features has a token on record; they never claim this one will ` +
@@ -2867,7 +2430,7 @@ export function methodDocument(radar: RadarData): string {
     `- Verdict benchmark (radar-6): every row is priced on one stated scenario — a $${commas(PRIORS.plan_deposit_usd)} ` +
       `deposit at a ${Math.round(PRIORS.plan_drop_share * 100)}% drop share over the plan's hold. The modelled drop ` +
       `(implied value x drop share x deposit / (TVL + deposit)) is netted against the plan's fees, a ` +
-      `${Math.round(PRIORS.tbill_annual * 100)}% T-bill on the same deposit, and ` +
+      `${Math.round(PRIORS.tbill_annual * 100)}% T-bill on the same deposit over the same hold, and ` +
       `$${PRIORS.wage_per_hour} for each hour of hands-on time, and the implied value must reach the board's rich ` +
       `line of ${Math.round(PRIORS.farm_density * 100)}% of TVL. FARM must beat all of it with odds of at least ` +
       `${PRIORS.farm_odds}; THIN beats its fees but not every benchmark; the rest are SKIP. This run: ` +
@@ -2880,7 +2443,8 @@ export function methodDocument(radar: RadarData): string {
     `Each plan is written for its protocol's mechanism (lending and CDP, DEX liquidity, bridges, staking and ` +
       `restaking, curator vaults, derivatives, yield vaults): nine steps — wallet, contract verification, the ` +
       `position, the qualifying habit, the hold, the monthly points check, the farm log, a priced exit rule, and ` +
-      `the verdict with its scenario arithmetic.`,
+      `the verdict with its scenario arithmetic. Every step states a dollar cost and a duration; capital follows ` +
+      `the protocol's TVL tier and the hold follows its age.`,
   );
   lines.push('');
   lines.push('## Integrity');
@@ -2888,27 +2452,17 @@ export function methodDocument(radar: RadarData): string {
   lines.push(
     `Board checksum ${f.checksum} (FNV-1a over the board's slug:implied-value sequence). The dashboard ` +
       `recomputes every row's launch and implied value from the fitted components it carries, re-derives the ` +
-      `totals, the rank order and this checksum in the browser, and prints the checks on its cover.`,
+      `totals, the rank order and this checksum in the browser, and prints the checks on its cover: the page ` +
+      `proves it is the board this program wrote, or says so.`,
   );
   lines.push('');
-  lines.push('## Known limits');
+  lines.push('## Limits');
   lines.push('');
   lines.push(
     `The band is the honest part of this board: a launch value is a fitted multiple of a fragmented TVL record, ` +
       `and the coverage figures above say how far such multiples usually land from the market's own price. Rows ` +
-      `are ranked by the middle of their band, never by its top.`,
-  );
-  lines.push('');
-  const L = radar.limits;
-  lines.push(
-    `Counted on this run: ${L.fallback_rows} of the ${a.ranked} ranked rows are priced on a borrowed factor ` +
-      `(${L.global_rows} of them on the global factor of last resort, the rest on their family's); ` +
-      `${L.undated_rows} ranked rows and ${L.undated_comps} of the ${f.comps} comps carry no listing date, so ` +
-      `their age reads through the median; the thinnest category with comps of its own is ${L.thinnest_category} ` +
-      `with ${L.thinnest_comps}; the top 10 rows hold ${Math.round(L.top10_tvl_share * 100)}% of the board's TVL, ` +
-      `so the head of the board is a concentration, not a consensus; ${L.clamp_rows} rows sit at the odds ` +
-      `clamps of 1% or 95%. The odds are a record of what peers did, not a forecast of any one protocol: they ` +
-      `never say a token will launch, or when, and a row's implied value inherits every one of these limits.`,
+      `are ranked by the middle of their band, never by its top. A protocol that records no token may still have ` +
+      `one its DefiLlama record does not carry.`,
   );
   lines.push('');
   return lines.join('\n');
