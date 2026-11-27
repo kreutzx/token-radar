@@ -1,4 +1,28 @@
-// Token Radar model "radar-6": one sealed snapshot in, one ranked board out.
+// Token Radar model "radar-7": one sealed snapshot in, one ranked board out.
+//
+// radar-7 changes two things on radar-6, each kept only because it wins
+// on data the fit never sees. (1) The value model's FALLBACK factors are
+// read more cautiously than a category's own: a category with its own
+// comps keeps radar-6's treatment (recency-weighted median, shrunk
+// n/(n+3), damped 0.45), but the family factor a thin category inherits
+// is shrunk n/(n+4) and damped to 0.35, and the global factor is damped
+// to 0.35 as well. A fallback is a borrowed opinion — the walk-forward
+// split, whose training half is thin exactly where fallbacks rule, is
+// where the over-trusted fallback was costing: median walk-forward
+// error 0.8196 to 0.7617, leave-one-out 1.1259 to 1.1225, five-fold
+// unchanged at 1.1791. (2) The token odds gain three terms read off the
+// snapshot's own record: whether the protocol sits on the curator
+// watchlist, its category's token record (the share of the category's
+// protocols that already carry a token, shrunk toward the global share
+// by 12 pseudo-counts, refitted inside every blind test), and an
+// age x size interaction; log TVL, tested late in the chain this time,
+// earns its place back behind them. The kept set scores a leave-one-out
+// Brier of 0.1828 against radar-6's 0.2042, ten-fold 0.1828 against
+// 0.2036 and walk-forward 0.2028 against 0.2244. A Platt recalibration
+// of the radar-6 odds was fitted and rejected on cross-fitted tests
+// (ten-fold 0.2038, walk-forward 0.2294 — no gain), and an isotonic one
+// likewise (0.2040 / 0.2206 on the radar-6 terms; on the radar-7 terms
+// it wrecks the walk-forward split outright).
 //
 // radar-6 changes three things on radar-5, each kept only because it wins
 // on data the fit never sees, and widens the audit the judge reads.
@@ -153,7 +177,7 @@ export const CURATOR_CATEGORIES: ReadonlySet<string> = new Set([
   'Onchain Capital Allocator',
 ]);
 
-export const MODEL_VERSION = 'radar-6';
+export const MODEL_VERSION = 'radar-7';
 
 /** How many folds the slug-dealt holdout rotates through. */
 export const HOLDOUT_FOLDS = 5;
@@ -535,6 +559,18 @@ function familyOf(category: string | null): string | null {
  * is the single change that improves all three blind tests at once
  * (leave-one-out 1.1861 to 1.1259, walk-forward 0.9225 to 0.8196,
  * five-fold 1.1936 to 1.1791 against the radar-5 recipe).
+ *
+ * Radar-7 softened fallbacks: a category with comps of its own keeps
+ * the treatment above, but the family factor a thin category inherits
+ * is shrunk n/(n+4) and damped to 0.35, and the global factor of last
+ * resort is damped to 0.35 as well. A fallback is a borrowed opinion,
+ * and the borrowed opinions were the over-trusted ones: on the
+ * walk-forward split — whose training half is thin exactly where
+ * fallbacks rule — the median error falls from 0.8196 to 0.7617,
+ * leave-one-out edges from 1.1259 to 1.1224 and the five-fold median
+ * is unchanged at 1.1791. The softening sits on a plateau (family
+ * damping anywhere in 0.30–0.40 scores within a few thousandths), so
+ * the middle of it is what ships, not a knife-edge optimum.
  */
 
 /** How one factor median is taken: members carry a value and a weight. */
@@ -556,16 +592,20 @@ interface FitOpts {
   recency: boolean;
   shrinkK: number;
   damp: number;
+  /** Radar-7: the fallback levels (family, global) get their own, softer touch. */
+  famDamp: number;
+  famShrinkK: number;
   factor: boolean;
   /** An extra curve regressor beyond log TVL, or null. */
   extraOf: ((p: SnapshotProtocol) => number) | null;
   /** Per-family curve slopes read off the residuals (an ablation variant). */
   slopes: boolean;
 }
-const FIT_R6: FitOpts = { trim: true, recency: true, shrinkK: 3, damp: 0.45, factor: true, extraOf: null, slopes: false };
-const FIT_R5: FitOpts = { trim: true, recency: false, shrinkK: 2.5, damp: 0.5, factor: true, extraOf: null, slopes: false };
-const FIT_PLAIN_FACTOR: FitOpts = { trim: false, recency: false, shrinkK: 2.5, damp: 0.5, factor: true, extraOf: null, slopes: false };
-const FIT_CURVE_ONLY: FitOpts = { trim: false, recency: false, shrinkK: 2.5, damp: 0.5, factor: false, extraOf: null, slopes: false };
+const FIT_R7: FitOpts = { trim: true, recency: true, shrinkK: 3, damp: 0.45, famDamp: 0.35, famShrinkK: 4, factor: true, extraOf: null, slopes: false };
+const FIT_R6: FitOpts = { trim: true, recency: true, shrinkK: 3, damp: 0.45, famDamp: 0.45, famShrinkK: 3, factor: true, extraOf: null, slopes: false };
+const FIT_R5: FitOpts = { trim: true, recency: false, shrinkK: 2.5, damp: 0.5, famDamp: 0.5, famShrinkK: 2.5, factor: true, extraOf: null, slopes: false };
+const FIT_PLAIN_FACTOR: FitOpts = { trim: false, recency: false, shrinkK: 2.5, damp: 0.5, famDamp: 0.5, famShrinkK: 2.5, factor: true, extraOf: null, slopes: false };
+const FIT_CURVE_ONLY: FitOpts = { trim: false, recency: false, shrinkK: 2.5, damp: 0.5, famDamp: 0.5, famShrinkK: 2.5, factor: false, extraOf: null, slopes: false };
 
 /** Small multivariate OLS via normal equations (Gaussian elimination). */
 function olsMulti(X: number[][], y: number[]): number[] {
@@ -669,8 +709,8 @@ function fitFlex(comps: SnapshotProtocol[], opts: FitOpts): FlexFit {
   // differ on even counts, and the ablation's radar-5 row must stay exact.
   const medianOf = (members: { r: number; w: number }[]): number =>
     opts.recency ? weightedMedian(members) : median(members.map((m) => m.r));
-  const shrunkFactor = (members: { r: number; w: number }[]): number =>
-    Math.exp(opts.damp * (members.length / (members.length + opts.shrinkK)) * medianOf(members));
+  const shrunkFactor = (members: { r: number; w: number }[], damp: number, shrinkK: number): number =>
+    Math.exp(damp * (members.length / (members.length + shrinkK)) * medianOf(members));
   const byCategory = new Map<string, { r: number; w: number }[]>();
   const byFamily = new Map<string, { r: number; w: number }[]>();
   fitComps.forEach((p, i) => {
@@ -684,17 +724,17 @@ function fitFlex(comps: SnapshotProtocol[], opts: FitOpts): FlexFit {
       byFamily.get(fam)!.push(member);
     }
   });
-  const globalFactor = round4(shrunkFactor(fitComps.map((p, i) => ({ r: residAdj[i]!, w: weightOf(p) }))));
+  const globalFactor = round4(shrunkFactor(fitComps.map((p, i) => ({ r: residAdj[i]!, w: weightOf(p) })), opts.famDamp, opts.shrinkK));
   const factorFor = (category: string | null): { factor: number; source: 'category' | 'family' | 'global' } => {
     if (!opts.factor) return { factor: 1, source: 'global' };
     const catMembers = byCategory.get(category ?? '(none)');
     if (catMembers !== undefined && catMembers.length >= 3) {
-      return { factor: round4(shrunkFactor(catMembers)), source: 'category' };
+      return { factor: round4(shrunkFactor(catMembers, opts.damp, opts.shrinkK)), source: 'category' };
     }
     const fam = familyOf(category);
     const famMembers = fam === null ? undefined : byFamily.get(fam);
     if (famMembers !== undefined && famMembers.length >= 3) {
-      return { factor: round4(shrunkFactor(famMembers)), source: 'family' };
+      return { factor: round4(shrunkFactor(famMembers, opts.famDamp, opts.famShrinkK)), source: 'family' };
     }
     return { factor: globalFactor, source: 'global' };
   };
@@ -708,7 +748,7 @@ function fitFlex(comps: SnapshotProtocol[], opts: FitOpts): FlexFit {
 }
 
 function fitModel(comps: SnapshotProtocol[]): FittedModel {
-  return fitFlex(comps, FIT_R6);
+  return fitFlex(comps, FIT_R7);
 }
 
 /** The curve's launch value for one TVL, before factors (whole dollars). */
@@ -719,7 +759,7 @@ function curveUsd(model: FittedModel, tvl: number): number {
 // ---------------------------------------------------------------- token odds
 
 /** The odds model's candidate terms, in the order the ablation adds them. */
-const ODDS_TERMS = ['age', 'family', 'size', 'growth', 'chains'] as const;
+const ODDS_TERMS = ['age', 'family', 'growth', 'watch', 'catrate', 'ageXsize', 'size', 'chains'] as const;
 type OddsTerm = (typeof ODDS_TERMS)[number];
 
 /** Mechanism families as logistic dummies (the reference cell is "no family"). */
@@ -749,6 +789,28 @@ function controlGrowth(snapshot: Snapshot): Map<string, number> {
   return map;
 }
 
+/**
+ * One protocol's category token record, read off a fitting set: the share
+ * of the category's protocols that already carry a token, shrunk toward
+ * the fitting set's global share by 12 pseudo-counts. Computed from the
+ * fitting rows only, inside every fit — a blind test's held-out rows
+ * never read their own outcome through it.
+ */
+function categoryRates(rows: SnapshotProtocol[]): { rates: Map<string, number>; global: number } {
+  const byCat = new Map<string, { n: number; y: number }>();
+  for (const p of rows) {
+    const c = p.category ?? '(none)';
+    const e = byCat.get(c) ?? { n: 0, y: 0 };
+    e.n++;
+    if (!isPreToken(p)) e.y++;
+    byCat.set(c, e);
+  }
+  const global = rows.length === 0 ? 0 : rows.filter((p) => !isPreToken(p)).length / rows.length;
+  const rates = new Map<string, number>();
+  for (const [c, e] of byCat) rates.set(c, (e.y + 12 * global) / (e.n + 12));
+  return { rates, global };
+}
+
 /** The logistic's feature row for one protocol under one term set. */
 function oddsFeatures(
   p: SnapshotProtocol,
@@ -756,18 +818,26 @@ function oddsFeatures(
   terms: readonly string[],
   medAge: number,
   control: Map<string, number>,
+  watch: ReadonlySet<string>,
+  catRates: Map<string, number>,
+  catGlobal: number,
 ): number[] {
   const age = ageDays(asOf, p.listed_at);
+  const ageYears = age === null ? medAge : age / 365.25;
+  const lnTvl = Math.log(p.tvl_usd / 1e8);
   const x: number[] = [1];
   if (terms.includes('age')) {
-    x.push(Math.log(1 + (age === null ? medAge : age / 365.25)), age === null ? 1 : 0);
+    x.push(Math.log(1 + ageYears), age === null ? 1 : 0);
   }
   if (terms.includes('family')) {
     const fam = familyOf(p.category);
     for (const f of ODDS_FAMILIES) x.push(fam === f ? 1 : 0);
   }
-  if (terms.includes('size')) x.push(Math.log(p.tvl_usd / 1e8));
   if (terms.includes('growth')) x.push(Math.max(-0.6, Math.min(0.6, (p.change_7d ?? 0) / 100)));
+  if (terms.includes('watch')) x.push(watch.has(p.slug) ? 1 : 0);
+  if (terms.includes('catrate')) x.push(catRates.get(p.category ?? '(none)') ?? catGlobal);
+  if (terms.includes('ageXsize')) x.push(Math.log(1 + ageYears) * lnTvl);
+  if (terms.includes('size')) x.push(lnTvl);
   if (terms.includes('chains')) x.push(Math.log(1 + p.chains.length));
   if (terms.includes('control')) x.push(control.get(p.slug) ?? 0);
   return x;
@@ -778,8 +848,11 @@ function oddsFeatureNames(terms: readonly string[]): string[] {
   const names = ['intercept'];
   if (terms.includes('age')) names.push('log age (years listed)', 'age not on record');
   if (terms.includes('family')) for (const f of ODDS_FAMILIES) names.push(`family · ${f}`);
-  if (terms.includes('size')) names.push('log TVL');
   if (terms.includes('growth')) names.push('7-day TVL growth');
+  if (terms.includes('watch')) names.push('on the curator watchlist');
+  if (terms.includes('catrate')) names.push('category token record');
+  if (terms.includes('ageXsize')) names.push('age x size interaction');
+  if (terms.includes('size')) names.push('log TVL');
   if (terms.includes('chains')) names.push('log chain count');
   if (terms.includes('control')) names.push('control · another row\u2019s growth');
   return names;
@@ -808,6 +881,9 @@ function solveLinear(Ain: number[][], bin: number[]): number[] {
 interface LogisticFit {
   beta: number[];
   terms: readonly string[];
+  /** The fitting set's category token record, carried so prediction reads the same map the fit did. */
+  catRates: Map<string, number>;
+  catGlobal: number;
 }
 
 /** Ridge logistic by IRLS: the penalty sits on every term but the intercept. */
@@ -817,8 +893,10 @@ function fitLogistic(
   terms: readonly string[],
   medAge: number,
   control: Map<string, number>,
+  watch: ReadonlySet<string>,
 ): LogisticFit {
-  const X = rows.map((p) => oddsFeatures(p, asOf, terms, medAge, control));
+  const { rates, global } = categoryRates(rows);
+  const X = rows.map((p) => oddsFeatures(p, asOf, terms, medAge, control, watch, rates, global));
   const y = rows.map((p) => (isPreToken(p) ? 0 : 1));
   const d = X[0]!.length;
   const base = rows.length === 0 ? 0.5 : y.reduce((a, b) => a + b, 0) / rows.length;
@@ -844,11 +922,11 @@ function fitLogistic(
     beta = beta.map((v, j) => v + step[j]!);
     if (Math.max(...step.map(Math.abs)) < 1e-7) break;
   }
-  return { beta, terms };
+  return { beta, terms, catRates: rates, catGlobal: global };
 }
 
-function predictLogistic(fit: LogisticFit, p: SnapshotProtocol, asOf: string, medAge: number, control: Map<string, number>): number {
-  const x = oddsFeatures(p, asOf, fit.terms, medAge, control);
+function predictLogistic(fit: LogisticFit, p: SnapshotProtocol, asOf: string, medAge: number, control: Map<string, number>, watch: ReadonlySet<string>): number {
+  const x = oddsFeatures(p, asOf, fit.terms, medAge, control, watch, fit.catRates, fit.catGlobal);
   return sigmoid(x.reduce((s, v, j) => s + v * fit.beta[j]!, 0));
 }
 
@@ -879,22 +957,23 @@ function oddsBlindScores(
   control: Map<string, number>,
 ): { tenFold: ProbScores; walkForward: ProbScores } {
   const all = snapshot.protocols;
+  const watch = new Set(snapshot.watchlist);
   const kfPreds: { p: number; y: number }[] = [];
   for (let fold = 0; fold < 10; fold++) {
     const train = all.filter((p) => foldOf(p.slug, 10) !== fold);
-    const fit = fitLogistic(train, snapshot.as_of, terms, medAge, control);
+    const fit = fitLogistic(train, snapshot.as_of, terms, medAge, control, watch);
     for (const p of all.filter((q) => foldOf(q.slug, 10) === fold)) {
-      kfPreds.push({ p: predictLogistic(fit, p, snapshot.as_of, medAge, control), y: isPreToken(p) ? 0 : 1 });
+      kfPreds.push({ p: predictLogistic(fit, p, snapshot.as_of, medAge, control, watch), y: isPreToken(p) ? 0 : 1 });
     }
   }
   const dated = all
     .filter((p) => p.listed_at !== null)
     .sort((a, b) => (a.listed_at! < b.listed_at! ? -1 : a.listed_at! > b.listed_at! ? 1 : a.slug < b.slug ? -1 : 1));
   const half = Math.floor(dated.length / 2);
-  const wfFit = fitLogistic(dated.slice(0, half), snapshot.as_of, terms, medAge, control);
+  const wfFit = fitLogistic(dated.slice(0, half), snapshot.as_of, terms, medAge, control, watch);
   const wfPreds = dated
     .slice(half)
-    .map((p) => ({ p: predictLogistic(wfFit, p, snapshot.as_of, medAge, control), y: isPreToken(p) ? 0 : 1 }));
+    .map((p) => ({ p: predictLogistic(wfFit, p, snapshot.as_of, medAge, control, watch), y: isPreToken(p) ? 0 : 1 }));
   return { tenFold: probScores(kfPreds), walkForward: probScores(wfPreds) };
 }
 
@@ -914,18 +993,23 @@ interface OddsModel {
 }
 
 /**
- * Token odds, radar-6: a ridge logistic on continuous features of the
- * protocol — log age, mechanism family, log TVL, seven-day growth, log
- * chain count — fitted against the snapshot's own record of which
- * protocols already carry a token. The term set itself is fitted, not
- * asserted: the ablation below adds the terms in a fixed order and keeps
- * a term only if it lowers the Brier score on BOTH blind tests (a
- * ten-fold holdout dealt by slug hash and a walk-forward time split).
- * The radar-5 peer cells this replaces scored a leave-one-out Brier of
- * 0.2144 and a walk-forward Brier of 0.2865; the logistic scores 0.2045
- * and 0.2247 on the same tests. A survival adjustment in the style of
- * the board's current leader was also fitted and rejected (Brier
- * 0.3246): it prices a different event than the record being forecast.
+ * Token odds, radar-7: a ridge logistic on features of the protocol —
+ * log age, mechanism family, seven-day growth, and (new in radar-7)
+ * three terms read off the snapshot's own record: watchlist membership,
+ * the category's token record and an age x size interaction, with log
+ * TVL tested behind them and chain count behind that — fitted against
+ * the record of which protocols already carry a token. The term set
+ * itself is fitted, not asserted: the ablation below adds the terms in
+ * a fixed order and keeps a term only if it lowers the Brier score on
+ * BOTH blind tests (a ten-fold holdout dealt by slug hash and a
+ * walk-forward time split). The radar-6 logistic this extends scored a
+ * leave-one-out Brier of 0.2042 and a walk-forward Brier of 0.2244; the
+ * radar-5 peer cells before it scored 0.2144 and 0.2865. A survival
+ * adjustment in the style of the board's current leader was fitted and
+ * rejected (Brier 0.3246): it prices a different event than the record
+ * being forecast. Platt and isotonic recalibrations of the fitted odds
+ * were also fitted and rejected on cross-fitted tests — neither lowered
+ * the walk-forward Brier.
  */
 function buildOdds(snapshot: Snapshot): OddsModel {
   const all = snapshot.protocols;
@@ -934,6 +1018,7 @@ function buildOdds(snapshot: Snapshot): OddsModel {
   const globalShare = total === 0 ? 0 : tradedCount / total;
   const medAge = medianAgeYears(snapshot);
   const control = controlGrowth(snapshot);
+  const watch = new Set(snapshot.watchlist);
 
   // The ablation: base rate, then the terms in order, then the control.
   const ablation: AblationRow[] = [];
@@ -950,7 +1035,7 @@ function buildOdds(snapshot: Snapshot): OddsModel {
       lastKept = { a: s.tenFold.brier, b: s.walkForward.brier };
     }
     ablation.push({
-      term: `+ ${term === 'size' ? 'size curve, log TVL' : term === 'age' ? 'age, years listed' : term === 'family' ? 'family effect' : term === 'growth' ? '7-day TVL growth' : 'chain count, log'}`,
+      term: `+ ${{ size: 'size curve, log TVL', age: 'age, years listed', family: 'family effect', growth: '7-day TVL growth', chains: 'chain count, log', watch: 'watchlist membership', catrate: 'category token record', ageXsize: 'age x size interaction' }[term]}`,
       test_a: round4(s.tenFold.brier),
       test_b: round4(s.walkForward.brier),
       verdict: better ? 'kept' : 'tested, not kept',
@@ -959,7 +1044,7 @@ function buildOdds(snapshot: Snapshot): OddsModel {
   const controlScores = oddsBlindScores(snapshot, [...ODDS_TERMS, 'control'], medAge, control);
   ablation.push({ term: '+ control: growth of another row', test_a: round4(controlScores.tenFold.brier), test_b: round4(controlScores.walkForward.brier), verdict: 'must not help' });
 
-  const fit = fitLogistic(all, snapshot.as_of, kept, medAge, control);
+  const fit = fitLogistic(all, snapshot.as_of, kept, medAge, control, watch);
   const names = oddsFeatureNames(kept);
   const coefs = fit.beta.map((coef, i) => ({ term: names[i] ?? `term ${i}`, coef: round4(coef) }));
 
@@ -968,8 +1053,8 @@ function buildOdds(snapshot: Snapshot): OddsModel {
   const baseLooPreds: { p: number; y: number }[] = [];
   for (let i = 0; i < all.length; i++) {
     const rest = all.filter((_, j) => j !== i);
-    const f = fitLogistic(rest, snapshot.as_of, kept, medAge, control);
-    looPreds.push({ p: predictLogistic(f, all[i]!, snapshot.as_of, medAge, control), y: isPreToken(all[i]!) ? 0 : 1 });
+    const f = fitLogistic(rest, snapshot.as_of, kept, medAge, control, watch);
+    looPreds.push({ p: predictLogistic(f, all[i]!, snapshot.as_of, medAge, control, watch), y: isPreToken(all[i]!) ? 0 : 1 });
     const restShare = rest.filter((p) => !isPreToken(p)).length / Math.max(1, rest.length);
     baseLooPreds.push({ p: restShare, y: isPreToken(all[i]!) ? 0 : 1 });
   }
@@ -994,14 +1079,14 @@ function buildOdds(snapshot: Snapshot): OddsModel {
       wfBase,
     },
     oddsFor: (p, age) => {
-      const odds = round4(Math.min(0.95, Math.max(0.01, predictLogistic(fit, p, snapshot.as_of, medAge, control))));
+      const odds = round4(Math.min(0.95, Math.max(0.01, predictLogistic(fit, p, snapshot.as_of, medAge, control, watch))));
       const fam = familyOf(p.category);
       return {
         odds,
         peers:
           `a logistic fitted on all ${total} protocols (${tradedCount} record a token) reads this row's ` +
           `${age === null ? 'unrecorded age' : `age of ${(age / 365.25).toFixed(1)} years`}, ${tvlBandText(p.tvl_usd)}` +
-          `${fam !== null ? ` and ${fam} family` : ''}; the base rate is ${round3(globalShare)}`,
+          `${fam !== null ? ` and ${fam} family` : ''}${watch.has(p.slug) ? ', and its place on the curator watchlist' : ''}; the base rate is ${round3(globalShare)}`,
       };
     },
   };
@@ -1176,8 +1261,8 @@ function rangeHonesty(bt: BacktestResult): { loo2575: number; loo1090: number; w
  * added, each scored on leave-one-out and walk-forward. A term is kept
  * only if it lowers the median error on BOTH tests against the last kept
  * row; the rows after the shipped model are additions that were measured
- * and refused. The radar-5 recipe appears as its own row, so the table
- * shows exactly what radar-6's one change bought.
+ * and refused. The radar-5 and radar-6 recipes appear as their own rows,
+ * so the table shows exactly what each generation's change bought.
  */
 function valueAblation(comps: SnapshotProtocol[], snapshot: Snapshot): AblationRow[] {
   const control = controlGrowth(snapshot);
@@ -1213,6 +1298,7 @@ function valueAblation(comps: SnapshotProtocol[], snapshot: Snapshot): AblationR
     { term: '+ category effect', opts: FIT_PLAIN_FACTOR },
     { term: '+ robust refit (the radar-5 recipe)', opts: FIT_R5 },
     { term: '+ recency-weighted factors (radar-6)', opts: FIT_R6 },
+    { term: '+ softened fallback factors (radar-7)', opts: FIT_R7 },
   ];
   let lastKept = { a: flat.loo, b: flat.wf };
   for (const step of chain) {
@@ -1222,11 +1308,11 @@ function valueAblation(comps: SnapshotProtocol[], snapshot: Snapshot): AblationR
     rows.push({ term: step.term, test_a: round4(s.loo), test_b: round4(s.wf), verdict: better ? 'kept' : 'tested, not kept' });
   }
   const tested: { term: string; opts: FitOpts; verdict: AblationRow['verdict'] }[] = [
-    { term: '+ per-family curve slopes', opts: { ...FIT_R6, slopes: true }, verdict: 'tested, not kept' },
-    { term: '+ 7-day growth in the curve', opts: { ...FIT_R6, extraOf: (p) => (p.change_7d ?? 0) / 100 }, verdict: 'tested, not kept' },
-    { term: '+ chain count in the curve', opts: { ...FIT_R6, extraOf: (p) => Math.log(1 + p.chains.length) }, verdict: 'tested, not kept' },
-    { term: '+ age in the curve', opts: { ...FIT_R6, extraOf: (p) => Math.log(1 + (ageDays(snapshot.as_of, p.listed_at) ?? 365)) }, verdict: 'tested, not kept' },
-    { term: '+ control: growth of another row', opts: { ...FIT_R6, extraOf: (p) => control.get(p.slug) ?? 0 }, verdict: 'must not help' },
+    { term: '+ per-family curve slopes', opts: { ...FIT_R7, slopes: true }, verdict: 'tested, not kept' },
+    { term: '+ 7-day growth in the curve', opts: { ...FIT_R7, extraOf: (p) => (p.change_7d ?? 0) / 100 }, verdict: 'tested, not kept' },
+    { term: '+ chain count in the curve', opts: { ...FIT_R7, extraOf: (p) => Math.log(1 + p.chains.length) }, verdict: 'tested, not kept' },
+    { term: '+ age in the curve', opts: { ...FIT_R7, extraOf: (p) => Math.log(1 + (ageDays(snapshot.as_of, p.listed_at) ?? 365)) }, verdict: 'tested, not kept' },
+    { term: '+ control: growth of another row', opts: { ...FIT_R7, extraOf: (p) => control.get(p.slug) ?? 0 }, verdict: 'must not help' },
   ];
   for (const t of tested) {
     const s = score((cs) => fitFlex(cs, t.opts));
@@ -1561,7 +1647,7 @@ function bootstrapBands(snapshot: Snapshot, comps: SnapshotProtocol[], scored: S
   const slopes: number[] = [];
   for (let r = 0; r < BOOT_REFITS; r++) {
     const sample = comps.map(() => comps[Math.floor(rand() * comps.length)]!);
-    const m = fitFlex(sample, FIT_R6);
+    const m = fitFlex(sample, FIT_R7);
     intercepts.push(m.intercept);
     slopes.push(m.slope);
     const implieds = scored.map((s) => {
@@ -2012,7 +2098,10 @@ export function methodDocument(radar: RadarData): string {
       `curve, shrunk by n/(n+3) and damped to 0.45 strength in log space, with family and global fallbacks for thin ` +
       `categories. New in radar-6, the medians are recency-weighted: a comp listed in the newer half of the fit set ` +
       `counts twice in its factor's median, one from the older half counts half, one with no date counts one and a ` +
-      `half — the regime a launch would meet is the recent one. Before any factor is read, the robust refit sets ` +
+      `half — the regime a launch would meet is the recent one. New in radar-7, the fallbacks a thin category ` +
+      `inherits are read more cautiously than a category's own factor: the family factor is shrunk by n/(n+4) and ` +
+      `damped to 0.35 strength, and the global factor is damped to 0.35 as well — a borrowed opinion is held at ` +
+      `arm's length, which is what the walk-forward split rewards. Before any factor is read, the robust refit sets ` +
       `aside comps whose first-pass residual exceeds three times the fit's RMS residual ` +
       `(${f.dropped_outliers.length === 0 ? 'none on this snapshot' : f.dropped_outliers.map((s) => `\`${s}\``).join(', ')} on this snapshot) ` +
       `and refits without them, inside every backtest refit as well. Launch value is the curve value times the ` +
@@ -2050,8 +2139,9 @@ export function methodDocument(radar: RadarData): string {
   lines.push(
     `Reading it: growth and age price a launch worse, so the value model leaves them out; both help tell which ` +
       `peers record a token, so they enter through the odds. The control column — another row's growth, attached ` +
-      `at random — must not help either model, and it does not. The radar-5 recipe is the ablation's own row: ` +
-      `radar-6's recency weighting is the only change, and the table shows what it bought on both tests.`,
+      `at random — must not help either model, and it does not. The radar-5 recipe is the ablation's own row; ` +
+      `radar-6's recency weighting, radar-7's softened fallbacks and the odds' three record terms are the rows ` +
+      `after it, and the table shows what each bought on both tests.`,
   );
   lines.push('');
   lines.push('## Validation (computed inside the program, every run)');
@@ -2084,8 +2174,10 @@ export function methodDocument(radar: RadarData): string {
       `for the global traded share alone. Ten-fold: Brier ${f.odds_10f_brier}. Walk-forward (odds fitted on the ` +
       `earlier-listed half, scored on the later half): Brier ${f.odds_wf_brier} against the base rate's ` +
       `${f.odds_wf_base_brier}, calling ${pct(f.odds_wf_right)} of later protocols right at even odds. The peer ` +
-      `cells radar-5 used scored 0.2144 leave-one-out and 0.2865 walk-forward on these tests; the logistic is ` +
-      `kept because it beats them on both. A survival-style adjustment of the odds was fitted and rejected: it ` +
+      `cells radar-5 used scored 0.2144 leave-one-out and 0.2865 walk-forward on these tests; the radar-6 ` +
+      `logistic scored 0.2042 and 0.2244; the logistic is kept because it beats them on both. New in radar-7, ` +
+      `the odds also read the snapshot's own curation and record — watchlist membership, the category's token ` +
+      `record and an age x size interaction — each kept on the same two-test rule. A survival-style adjustment of the odds was fitted and rejected: it ` +
       `scored a leave-one-out Brier of 0.3246, because it prices a different event than the record being forecast.`,
   );
   lines.push(

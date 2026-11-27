@@ -1,4 +1,4 @@
-// Token Radar dashboard, model radar-6. Reads window.RADAR (written beside
+// Token Radar dashboard, model radar-7. Reads window.RADAR (written beside
 // dashboard/ by main.ts) and renders the KPI strip, the ranked board, filters,
 // a per-protocol detail panel, the live-token view and the method panel. No
 // network: every byte it shows is in data.js, and every value it shows is
@@ -221,7 +221,7 @@
   function hero() {
     return el('section', { class: 'hero' },
       el('h1', { text: 'Pre-token protocols ranked by what their token would be worth \u2014 priced by a model fitted to the ones that already launched, and audited on this page' }),
-      el('p', { text: 'Launch value comes from a size curve fitted on this snapshot\u2019s own traded protocols; each category then takes a recency-weighted factor \u2014 the recent half of the record counts double, because the regime a launch would meet is the recent one. Token odds are a fitted logistic, not a lookup table. Every term in both models was kept or dropped on two blind tests, printed in the Method tab; every row\u2019s range is its own distribution over 200 bootstrap refits; every verdict is priced against fees, a T-bill and an hourly wage on one stated scenario. The full audit is in the Method tab and in METHOD.md beside this page.' })
+      el('p', { text: 'Launch value comes from a size curve fitted on this snapshot\u2019s own traded protocols; each category then takes a recency-weighted factor \u2014 the recent half of the record counts double, because the regime a launch would meet is the recent one \u2014 and a category too thin to have its own factor inherits a softer one, held at arm\u2019s length. Token odds are a fitted logistic that also reads the snapshot\u2019s own record \u2014 watchlist membership and each category\u2019s token record \u2014 not a lookup table. Every term in both models was kept or dropped on two blind tests, printed in the Method tab; every row\u2019s range is its own distribution over 200 bootstrap refits; every verdict is priced against fees, a T-bill and an hourly wage on one stated scenario. The full audit is in the Method tab and in METHOD.md beside this page.' })
     );
   }
 

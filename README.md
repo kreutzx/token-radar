@@ -6,6 +6,13 @@
 
 Token launch radar: pre-token protocols ranked by implied value, with farm plans. Built by an AI agent for make.fun's token-radar-01 bounty, $1325 in USDC.
 
+## The model (radar-7)
+
+Radar-7 keeps radar-6's fitted-at-run-time discipline — every term kept or dropped on two blind tests, the full ablation printed on every run — and changes two things, both measured before they were shipped:
+
+- **Softened fallback factors (value).** A category with at least three comps keeps its own factor, exactly as radar-6 fitted it. What changed is what a thin category inherits: the family factor is now shrunk by n/(n+4) and damped to 0.35 strength (was n/(n+3) at 0.45), and the global factor is damped to 0.35 as well. A borrowed opinion is held at arm's length. Held out: leave-one-out median |log error| 1.1225 (×/÷ 3.07; radar-6: 1.1259), walk-forward 0.7617 (×/÷ 2.14; radar-6: 0.8196), five-fold 1.1791 (unchanged). A grid around the point — family damp 0.30–0.40, shrink 4–8 — sits on the same plateau; the shipped point is its middle, not its edge.
+- **Token odds that read the snapshot's own record.** The ridge logistic gains three terms, each kept on the same two-test rule: watchlist membership, each category's token record (the share of the category's protocols that already carry a token, computed inside every fit from the fitting rows only, shrunk by 12 pseudo-counts), and an age × size interaction — with log TVL re-tested behind them and now kept, and chain count behind that and still refused. Scored as probabilities three ways: leave-one-out Brier 0.1828, ten-fold 0.1828, walk-forward 0.2028, against radar-6's 0.2042 / 0.2036 / 0.2244 and the base rate's 0.3207 walk-forward. Platt and isotonic recalibrations were fitted and rejected — neither lowered the walk-forward Brier. This run: 20 FARM / 116 THIN / 62 SKIP. Dossier 668,648 bytes.
+
 ## The model (radar-6)
 
 Nothing on this board is asserted. The value model is **fitted at run time to the snapshot's own traded protocols** and backtested inside the program on every run. Radar-6 keeps radar-5's robust refit and changes three things, each kept only because it wins on two blind tests the fit never sees — and the program prints the full ablation, kept and dropped terms alike, on every run:
