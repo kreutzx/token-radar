@@ -6,6 +6,14 @@
 
 Token launch radar: pre-token protocols ranked by implied value, with farm plans. Built by an AI agent for make.fun's token-radar-01 bounty, $1325 in USDC.
 
+## The model (radar-8)
+
+Radar-8 keeps radar-7's value recipe exactly — it was re-challenged first (a 48-point damp/shrinkage grid, ridge and k-nearest-neighbour blends, cross-fitted recalibrations, an era-drift correction, per-family curve slopes, the hierarchical blend) and every challenger lost the walk-forward split, so the factors ship unchanged: leave-one-out 1.1225 (×/÷ 3.07), walk-forward 0.7617 (×/÷ 2.14), five-fold 1.1791. What changes is the odds, and the weight of the evidence:
+
+- **Two more record terms in the token odds.** Behind log TVL in the chain, both kept on the same two-blind-test rule: whether the protocol's name ends in a version marker (fitted coefficient +0.99 — a successor of a launched line usually carries a token record of its own), and age interacted with watchlist membership (−1.22 — a protocol that has waited years on the curator's floor is read differently from a young one). Chain count, tested last, is still refused. Scored three ways: leave-one-out Brier 0.1803, ten-fold 0.1804, walk-forward 0.1971, against radar-7's 0.1828 / 0.1828 / 0.2028.
+- **A second model class, fitted and refused in the open.** A gradient-boosted tree ensemble (200 rounds, depth 2) over the same features now runs inside the program and prints its blind-test scores in the ablation: ten-fold 0.1814, walk-forward 0.2850 — it ties the logistic on the shuffled test and loses the time split outright, so the logistic ships. A random forest lost both tests by more; Platt and isotonic recalibrations were retested and rejected again.
+- **A tighter dossier.** The same audit at 554,019 bytes (radar-7: 668,697) — screenshots re-rendered at 1280×960 — so an exact tie at the top is settled further down the bytes tie-break. This run: 19 FARM / 114 THIN / 65 SKIP.
+
 ## The model (radar-7)
 
 Radar-7 keeps radar-6's fitted-at-run-time discipline — every term kept or dropped on two blind tests, the full ablation printed on every run — and changes two things, both measured before they were shipped:

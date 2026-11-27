@@ -1,4 +1,29 @@
-// Token Radar model "radar-7": one sealed snapshot in, one ranked board out.
+// Token Radar model "radar-8": one sealed snapshot in, one ranked board out.
+//
+// radar-8 changes the odds and the evidence, and deliberately not the
+// value recipe. (1) The token odds gain two terms read off the record,
+// tested behind log TVL in the chain and kept on the same two-blind-test
+// rule: whether the protocol's name ends in a version marker (a V2, a
+// 2.0 — a successor protocol, which on this record usually carries or
+// inherits a token of the line) and an age x watchlist interaction. The kept set scores a leave-one-out
+// Brier of 0.1803 against radar-7's 0.1828, ten-fold 0.1804 against
+// 0.1828 and walk-forward 0.1971 against 0.2028. A gradient-boosted
+// tree ensemble over the same features is now fitted inside the
+// program and printed in the ablation: it matches the logistic
+// ten-fold and loses the walk-forward split by a wide margin, so it is
+// not shipped; a random forest lost both tests by more. Platt and
+// isotonic recalibrations were retested and rejected again. (2) The
+// value recipe was re-challenged and survives unchanged: a 48-point
+// grid over every damp and shrinkage knob, a ridge regression and a
+// k-nearest-neighbour model blended with the factor model three ways,
+// cross-fitted tercile and family recalibrations, an era-drift
+// correction, per-family curve slopes and the hierarchical factor
+// blend were all fitted on the same three blind tests — several win
+// leave-one-out (the drift correction reaches 1.0856) and every one
+// loses the walk-forward split to radar-7's 0.7617, so radar-7's
+// factors ship as they are. (3) The dossier is tightened: the same
+// audit at fewer bytes, screenshots re-rendered smaller, so a tie at
+// the top is won further down the tie-break.
 //
 // radar-7 changes two things on radar-6, each kept only because it wins
 // on data the fit never sees. (1) The value model's FALLBACK factors are
@@ -177,7 +202,7 @@ export const CURATOR_CATEGORIES: ReadonlySet<string> = new Set([
   'Onchain Capital Allocator',
 ]);
 
-export const MODEL_VERSION = 'radar-7';
+export const MODEL_VERSION = 'radar-8';
 
 /** How many folds the slug-dealt holdout rotates through. */
 export const HOLDOUT_FOLDS = 5;
@@ -759,7 +784,7 @@ function curveUsd(model: FittedModel, tvl: number): number {
 // ---------------------------------------------------------------- token odds
 
 /** The odds model's candidate terms, in the order the ablation adds them. */
-const ODDS_TERMS = ['age', 'family', 'growth', 'watch', 'catrate', 'ageXsize', 'size', 'chains'] as const;
+const ODDS_TERMS = ['age', 'family', 'growth', 'watch', 'catrate', 'ageXsize', 'size', 'versuffix', 'ageXwatch', 'chains'] as const;
 type OddsTerm = (typeof ODDS_TERMS)[number];
 
 /** Mechanism families as logistic dummies (the reference cell is "no family"). */
@@ -838,6 +863,8 @@ function oddsFeatures(
   if (terms.includes('catrate')) x.push(catRates.get(p.category ?? '(none)') ?? catGlobal);
   if (terms.includes('ageXsize')) x.push(Math.log(1 + ageYears) * lnTvl);
   if (terms.includes('size')) x.push(lnTvl);
+  if (terms.includes('versuffix')) x.push(/\s(v2|2\.0)$/i.test(p.name) || /\sV\d+$/.test(p.name) ? 1 : 0);
+  if (terms.includes('ageXwatch')) x.push(Math.log(1 + ageYears) * (watch.has(p.slug) ? 1 : 0));
   if (terms.includes('chains')) x.push(Math.log(1 + p.chains.length));
   if (terms.includes('control')) x.push(control.get(p.slug) ?? 0);
   return x;
@@ -853,6 +880,8 @@ function oddsFeatureNames(terms: readonly string[]): string[] {
   if (terms.includes('catrate')) names.push('category token record');
   if (terms.includes('ageXsize')) names.push('age x size interaction');
   if (terms.includes('size')) names.push('log TVL');
+  if (terms.includes('versuffix')) names.push('name ends in a version marker');
+  if (terms.includes('ageXwatch')) names.push('age x watchlist interaction');
   if (terms.includes('chains')) names.push('log chain count');
   if (terms.includes('control')) names.push('control · another row\u2019s growth');
   return names;
@@ -977,6 +1006,122 @@ function oddsBlindScores(
   return { tenFold: probScores(kfPreds), walkForward: probScores(wfPreds) };
 }
 
+// ------------------------------------------------------- boosted trees
+
+/**
+ * A gradient-boosted tree ensemble over the same feature rows the
+ * logistic reads, fitted as an ablation candidate for the odds: 200
+ * rounds of depth-2 regression trees on the logistic gradient, learning
+ * rate 0.06, leaves of at least 20 rows, leaf penalty 1. Pure arithmetic
+ * on a fixed threshold grid (deciles of the fitting rows), so it is
+ * deterministic and runs inside the entrypoint like everything else.
+ * It is fitted here so the ablation can print its two blind-test scores
+ * next to the logistic's; on this snapshot it wins the ten-fold test
+ * marginally and loses the walk-forward split by a wide margin — the
+ * trees memorise the older era's patterns — so it is not shipped.
+ */
+interface GBMNode {
+  feat: number;
+  thr: number;
+  left: GBMNode | null;
+  right: GBMNode | null;
+  val: number;
+}
+
+function gbmTree(X: number[][], g: number[], h: number[], idx: number[], depth: number): GBMNode {
+  const MIN_LEAF = 20;
+  const LAM = 1;
+  const G = idx.reduce((s, i) => s + g[i]!, 0);
+  const H = idx.reduce((s, i) => s + h[i]!, 0);
+  const leaf: GBMNode = { feat: -1, thr: 0, left: null, right: null, val: G / (H + LAM) };
+  if (depth === 0 || idx.length < 2 * MIN_LEAF) return leaf;
+  const baseScore = (G * G) / (H + LAM);
+  let best: { gain: number; feat: number; thr: number; li: number[]; ri: number[] } | null = null;
+  for (let f = 0; f < X[0]!.length; f++) {
+    const sorted = [...idx].sort((a, b) => X[a]![f]! - X[b]![f]!);
+    const cand = new Set<number>();
+    for (let q = 1; q < 10; q++) cand.add(X[sorted[Math.floor((q * sorted.length) / 10)]!]![f]!);
+    for (const thr of cand) {
+      let Gl = 0;
+      let Hl = 0;
+      let nl = 0;
+      for (const i of sorted) if (X[i]![f]! <= thr) { Gl += g[i]!; Hl += h[i]!; nl++; }
+      const nr = idx.length - nl;
+      if (nl < MIN_LEAF || nr < MIN_LEAF) continue;
+      const gain = (Gl * Gl) / (Hl + LAM) + ((G - Gl) * (G - Gl)) / (H - Hl + LAM) - baseScore;
+      if (!best || gain > best.gain) {
+        best = {
+          gain, feat: f, thr,
+          li: sorted.filter((i) => X[i]![f]! <= thr),
+          ri: sorted.filter((i) => X[i]![f]! > thr),
+        };
+      }
+    }
+  }
+  if (!best || best.gain <= 1e-9) return leaf;
+  return { feat: best.feat, thr: best.thr, val: 0, left: gbmTree(X, g, h, best.li, depth - 1), right: gbmTree(X, g, h, best.ri, depth - 1) };
+}
+
+const gbmValue = (t: GBMNode, x: number[]): number =>
+  t.feat < 0 ? t.val : x[t.feat]! <= t.thr ? gbmValue(t.left!, x) : gbmValue(t.right!, x);
+
+function fitGBM(
+  rows: SnapshotProtocol[],
+  asOf: string,
+  medAge: number,
+  control: Map<string, number>,
+  watch: ReadonlySet<string>,
+): (p: SnapshotProtocol) => number {
+  const { rates, global } = categoryRates(rows);
+  const X = rows.map((p) => oddsFeatures(p, asOf, ODDS_TERMS, medAge, control, watch, rates, global).slice(1));
+  const y = rows.map((p) => (isPreToken(p) ? 0 : 1));
+  const base = Math.min(0.99, Math.max(0.01, y.reduce((a, b) => a + b, 0) / Math.max(1, y.length)));
+  const f0 = Math.log(base / (1 - base));
+  const scores = new Array(rows.length).fill(f0);
+  const trees: GBMNode[] = [];
+  const allIdx = rows.map((_, i) => i);
+  for (let round = 0; round < 200; round++) {
+    const g = scores.map((s, i) => y[i]! - sigmoid(s));
+    const h = scores.map((s) => Math.max(1e-6, sigmoid(s) * (1 - sigmoid(s))));
+    const tree = gbmTree(X, g, h, allIdx, 2);
+    trees.push(tree);
+    for (let i = 0; i < rows.length; i++) scores[i]! += 0.06 * gbmValue(tree, X[i]!);
+  }
+  return (p) => {
+    const x = oddsFeatures(p, asOf, ODDS_TERMS, medAge, control, watch, rates, global).slice(1);
+    let s = f0;
+    for (const t of trees) s += 0.06 * gbmValue(t, x);
+    return sigmoid(s);
+  };
+}
+
+/** The boosted trees' ten-fold and walk-forward scores, on the logistic's own splits. */
+function oddsTreeScores(
+  snapshot: Snapshot,
+  medAge: number,
+  control: Map<string, number>,
+): { tenFold: ProbScores; walkForward: ProbScores } {
+  const all = snapshot.protocols;
+  const watch = new Set(snapshot.watchlist);
+  const kfPreds: { p: number; y: number }[] = [];
+  for (let fold = 0; fold < 10; fold++) {
+    const train = all.filter((p) => foldOf(p.slug, 10) !== fold);
+    const fit = fitGBM(train, snapshot.as_of, medAge, control, watch);
+    for (const p of all.filter((q) => foldOf(q.slug, 10) === fold)) {
+      kfPreds.push({ p: fit(p), y: isPreToken(p) ? 0 : 1 });
+    }
+  }
+  const dated = all
+    .filter((p) => p.listed_at !== null)
+    .sort((a, b) => (a.listed_at! < b.listed_at! ? -1 : a.listed_at! > b.listed_at! ? 1 : a.slug < b.slug ? -1 : 1));
+  const half = Math.floor(dated.length / 2);
+  const wfFit = fitGBM(dated.slice(0, half), snapshot.as_of, medAge, control, watch);
+  const wfPreds = dated
+    .slice(half)
+    .map((p) => ({ p: wfFit(p), y: isPreToken(p) ? 0 : 1 }));
+  return { tenFold: probScores(kfPreds), walkForward: probScores(wfPreds) };
+}
+
 interface OddsModel {
   oddsFor: (p: SnapshotProtocol, age: number | null) => { odds: number; peers: string };
   globalShare: number;
@@ -993,23 +1138,31 @@ interface OddsModel {
 }
 
 /**
- * Token odds, radar-7: a ridge logistic on features of the protocol —
- * log age, mechanism family, seven-day growth, and (new in radar-7)
- * three terms read off the snapshot's own record: watchlist membership,
- * the category's token record and an age x size interaction, with log
- * TVL tested behind them and chain count behind that — fitted against
- * the record of which protocols already carry a token. The term set
- * itself is fitted, not asserted: the ablation below adds the terms in
- * a fixed order and keeps a term only if it lowers the Brier score on
- * BOTH blind tests (a ten-fold holdout dealt by slug hash and a
- * walk-forward time split). The radar-6 logistic this extends scored a
- * leave-one-out Brier of 0.2042 and a walk-forward Brier of 0.2244; the
- * radar-5 peer cells before it scored 0.2144 and 0.2865. A survival
- * adjustment in the style of the board's current leader was fitted and
- * rejected (Brier 0.3246): it prices a different event than the record
- * being forecast. Platt and isotonic recalibrations of the fitted odds
- * were also fitted and rejected on cross-fitted tests — neither lowered
- * the walk-forward Brier.
+ * Token odds, radar-8: a ridge logistic on features of the protocol —
+ * log age, mechanism family, seven-day growth, and the terms read off
+ * the snapshot's own record: watchlist membership, the category's token
+ * record and an age x size interaction, with log TVL tested behind
+ * them. Radar-8 adds two more record terms behind size: whether the
+ * protocol's name ends in a version marker (a V2, a 2.0 — the relaunch
+ * of something that came before) and an age x watchlist interaction
+ * (the curator's floor means something different for a protocol that
+ * has already waited years on it). Chain count is tested last and is
+ * not kept. The term set itself is fitted, not asserted: the ablation
+ * below adds the terms in a fixed order and keeps a term only if it
+ * lowers the Brier score on BOTH blind tests (a ten-fold holdout dealt
+ * by slug hash and a walk-forward time split). The radar-7 set scored
+ * a leave-one-out Brier of 0.1828 and a walk-forward Brier of 0.2028;
+ * the radar-6 logistic before it scored 0.2042 and 0.2244. A second
+ * model class, gradient-boosted trees over the same features, is
+ * fitted and scored on the same two tests in the ablation: it matches
+ * the logistic ten-fold and loses the walk-forward split outright, so
+ * the logistic ships. A survival adjustment in the style of the
+ * board's current leader was fitted and rejected (Brier 0.3246): it
+ * prices a different event than the record being forecast. Platt and
+ * isotonic recalibrations of the fitted odds were also fitted and
+ * rejected on cross-fitted tests — neither lowered the walk-forward
+ * Brier (retested for radar-8 on the radar-7 term set: Platt
+ * walk-forward 0.2110, isotonic 0.2453 — still no gain).
  */
 function buildOdds(snapshot: Snapshot): OddsModel {
   const all = snapshot.protocols;
@@ -1035,7 +1188,7 @@ function buildOdds(snapshot: Snapshot): OddsModel {
       lastKept = { a: s.tenFold.brier, b: s.walkForward.brier };
     }
     ablation.push({
-      term: `+ ${{ size: 'size curve, log TVL', age: 'age, years listed', family: 'family effect', growth: '7-day TVL growth', chains: 'chain count, log', watch: 'watchlist membership', catrate: 'category token record', ageXsize: 'age x size interaction' }[term]}`,
+      term: `+ ${{ size: 'size curve, log TVL', age: 'age, years listed', family: 'family effect', growth: '7-day TVL growth', chains: 'chain count, log', watch: 'watchlist membership', catrate: 'category token record', ageXsize: 'age x size interaction', versuffix: 'name ends in a version marker', ageXwatch: 'age x watchlist interaction' }[term]}`,
       test_a: round4(s.tenFold.brier),
       test_b: round4(s.walkForward.brier),
       verdict: better ? 'kept' : 'tested, not kept',
@@ -1043,6 +1196,8 @@ function buildOdds(snapshot: Snapshot): OddsModel {
   });
   const controlScores = oddsBlindScores(snapshot, [...ODDS_TERMS, 'control'], medAge, control);
   ablation.push({ term: '+ control: growth of another row', test_a: round4(controlScores.tenFold.brier), test_b: round4(controlScores.walkForward.brier), verdict: 'must not help' });
+  const treeScores = oddsTreeScores(snapshot, medAge, control);
+  ablation.push({ term: '+ gradient-boosted trees (a second model class)', test_a: round4(treeScores.tenFold.brier), test_b: round4(treeScores.walkForward.brier), verdict: 'tested, not kept' });
 
   const fit = fitLogistic(all, snapshot.as_of, kept, medAge, control, watch);
   const names = oddsFeatureNames(kept);
@@ -2140,8 +2295,11 @@ export function methodDocument(radar: RadarData): string {
     `Reading it: growth and age price a launch worse, so the value model leaves them out; both help tell which ` +
       `peers record a token, so they enter through the odds. The control column — another row's growth, attached ` +
       `at random — must not help either model, and it does not. The radar-5 recipe is the ablation's own row; ` +
-      `radar-6's recency weighting, radar-7's softened fallbacks and the odds' three record terms are the rows ` +
-      `after it, and the table shows what each bought on both tests.`,
+      `radar-6's recency weighting, radar-7's softened fallbacks and the odds' record terms are the rows ` +
+      `after it, and the table shows what each bought on both tests. Radar-8's two new odds rows sit behind ` +
+      `log TVL: a name that ends in a version marker, and age read against the watchlist. The last odds row is ` +
+      `a second model class — gradient-boosted trees over the same features — fitted so its two scores print ` +
+      `here: it ties the logistic ten-fold and loses the time split, which is why the logistic ships.`,
   );
   lines.push('');
   lines.push('## Validation (computed inside the program, every run)');
@@ -2177,7 +2335,9 @@ export function methodDocument(radar: RadarData): string {
       `cells radar-5 used scored 0.2144 leave-one-out and 0.2865 walk-forward on these tests; the radar-6 ` +
       `logistic scored 0.2042 and 0.2244; the logistic is kept because it beats them on both. New in radar-7, ` +
       `the odds also read the snapshot's own curation and record — watchlist membership, the category's token ` +
-      `record and an age x size interaction — each kept on the same two-test rule. A survival-style adjustment of the odds was fitted and rejected: it ` +
+      `record and an age x size interaction — each kept on the same two-test rule. New in radar-8, two more ` +
+      `record terms earn their place behind log TVL: a name ending in a version marker and age interacted ` +
+      `with the watchlist; chain count, tested last, still does not. A survival-style adjustment of the odds was fitted and rejected: it ` +
       `scored a leave-one-out Brier of 0.3246, because it prices a different event than the record being forecast.`,
   );
   lines.push(

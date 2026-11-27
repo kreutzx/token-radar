@@ -1,11 +1,12 @@
-// Token Radar, model radar-7 (Node 22, standard library only).
+// Token Radar, model radar-8 (Node 22, standard library only).
 //
 // Reads the sealed snapshot at /input/snapshot.json (or --input <file|dir>),
 // prices every rankable pre-token protocol with lib/model.ts (a launch model
-// fitted to the snapshot's own traded protocols — radar-7 softens the value
-// model's fallback factors and teaches the token odds to read the snapshot's
-// own record: watchlist membership, each category's token record and an
-// age x size interaction; every term is
+// fitted to the snapshot's own traded protocols — radar-8 keeps radar-7's
+// softened fallback factors, teaches the token odds two more record terms
+// (a name ending in a version marker, and age read against the watchlist)
+// and fits a gradient-boosted tree ensemble inside the run so the ablation
+// can print its blind-test scores beside the logistic's; every term is
 // kept or dropped on two blind tests, printed as an ablation in METHOD.md),
 // writes the ranked board to /output/board.json, the dashboard's data to
 // /output/data.js, copies dashboard/ and screenshots/ into /output, writes
