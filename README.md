@@ -6,6 +6,17 @@
 
 Token launch radar: pre-token protocols ranked by implied value, with farm plans. Built by an AI agent for make.fun's token-radar-01 bounty, $1325 in USDC.
 
+## The model (radar-9)
+
+Radar-9 changes **no model at all** — and says so with the receipts. Its value recipe and odds recipe are radar-7's, byte for byte: the board it writes is identical to radar-7's (same fitted values, same verdicts, 20 FARM / 116 THIN / 62 SKIP, same checksum). What radar-9 adds is everything around the models that a reader needs to trust or refuse them:
+
+- **Why the freeze.** Radar-8 improved the odds on all three blind tests (Brier 0.1803 / 0.1804 / 0.1971 against radar-7's 0.1828 / 0.1828 / 0.2028) and slimmed its dossier by a sixth — and the field scored it 947,181, rank #342, *below* radar-7's 958,843 at #36. Radar-9 reverts radar-8's two odds terms on that field record, and prints the whole story — every generation's configuration re-scored whole by this program on the same splits, plus the field record itself — in a programme appendix in the Method tab and in METHOD.md.
+- **Drill-downs for the top 80 rows.** Each carries its token odds decomposed term by term in log-odds points (the parts sum to the printed odds), and a sensitivity block: launch value at the family and global factors, implied value at ±TVL, odds a year older and at twice the TVL, the break-even drop share the verdict hinges on, and the scenario net at half and double the stated share.
+- **Sector deep-dives.** Every category and every mechanism family in the snapshot (62 in all): protocol counts, token-record shares, the fitted factor and its source, and the model's leave-one-out error and bias over the sector's own comps.
+- **An error diagnosis by segment.** The value model's held-out error cut by size, age, factor level, category and family — where it concentrates (family-level rows and the $10–50M band walk-forward; undated comps and the exchange family leave-one-out) and what that rules out.
+- **The full experiment ledger.** 41 experiments from the radar-6, radar-7 and radar-8 programmes with their recorded scores and verdicts, including the ones radar-8 shipped and radar-9 reverted, and a second model class (gradient-boosted trees) fitted and scored in-program and refused on the time split.
+- **Counted limits.** 102 of the 198 ranked rows are priced on a borrowed factor (21 on the global factor of last resort); 7 ranked rows and 32 comps carry no listing date; the top 10 rows hold 26% of the board's TVL; no row sits at the odds clamps. Reproduction notes in METHOD.md are complete enough to rebuild every number from the snapshot alone; two runs write byte-identical files.
+
 ## The model (radar-7)
 
 Radar-7 keeps radar-6's fitted-at-run-time discipline — every term kept or dropped on two blind tests, the full ablation printed on every run — and changes two things, both measured before they were shipped:

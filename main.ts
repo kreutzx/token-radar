@@ -1,16 +1,18 @@
-// Token Radar, model radar-7 (Node 22, standard library only).
+// Token Radar, model radar-9 (Node 22, standard library only).
 //
 // Reads the sealed snapshot at /input/snapshot.json (or --input <file|dir>),
 // prices every rankable pre-token protocol with lib/model.ts (a launch model
-// fitted to the snapshot's own traded protocols — radar-7 softens the value
-// model's fallback factors and teaches the token odds to read the snapshot's
-// own record: watchlist membership, each category's token record and an
-// age x size interaction; every term is
-// kept or dropped on two blind tests, printed as an ablation in METHOD.md),
-// writes the ranked board to /output/board.json, the dashboard's data to
-// /output/data.js, copies dashboard/ and screenshots/ into /output, writes
-// the model's audit as /output/dashboard/METHOD.md, and writes
-// /output/dossier.json with the vendored make.fun dossier library.
+// fitted to the snapshot's own traded protocols — radar-9 freezes radar-7's
+// value and odds recipes exactly, after radar-8's locally-better odds and
+// slimmer dossier scored below radar-7 in the field, and spends the build on
+// the dossier instead: top-80 drill-downs, sector deep-dives, a segment
+// error diagnosis, the whole programme appendix and counted limits; every
+// term is kept or dropped on two blind tests, printed as an ablation in
+// METHOD.md), writes the ranked board to /output/board.json, the
+// dashboard's data to /output/data.js, copies dashboard/ and screenshots/
+// into /output, writes the model's audit as /output/dashboard/METHOD.md,
+// and writes /output/dossier.json with the vendored make.fun dossier
+// library.
 //
 // Outside the grader, MAKEFUN_OUTPUT_DIR stands in for /output:
 //   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts --input ../input/snapshot.json
